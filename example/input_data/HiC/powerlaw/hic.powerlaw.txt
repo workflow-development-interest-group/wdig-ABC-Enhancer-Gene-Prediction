@@ -1,0 +1,2 @@
+maxWindow	minWindow	pl_gamma	pl_scale	resolution
+1000000	10000	-1.337931007592843	-1.5509625354877727	5000

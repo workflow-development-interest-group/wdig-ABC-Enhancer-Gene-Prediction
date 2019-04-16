@@ -1,0 +1,3 @@
+name	sizes	genes	ue_genes
+hg19	example/config/chr22	example/config/RefSeqCurated.170308.chr22.small.bed	example/config/UbiquitouslyExpressedGenesHG19.txt
+

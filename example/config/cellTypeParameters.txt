@@ -1,0 +1,2 @@
+cell_type	feature_DHS	feature_ATAC	feature_H3K27ac	default_accessibility_feature	hic_cell_type	RNA_tpm_file	genome
+K562	example/input_data/Chromatin/wgEncodeUwDnaseK562AlnRep1.chr22.bam		example/input_data/Chromatin/wgEncodeBroadHistoneK562H3K27ac_ENCFF000BWZ.q30.chr22.bam	DHS	K562	example/input_data/Expression/K562.featureCounts.RPKM.txt	hg19
