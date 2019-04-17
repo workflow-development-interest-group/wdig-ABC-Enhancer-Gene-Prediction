@@ -10,29 +10,21 @@ def get_model_argument_parser():
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
         pass
 
-    epilog = ("model is:\n"
-              "\tactivity = (H3K27ac * DHS ^ Ratio) ^ (1 / (1 + Ratio))\n"
-              "\tscore = (activity ^ A.beta) * (proximity ^ P.beta)\n"
-              "\trelative effect = score / (sum of scores in neighborhood)")
-
-
     parser = argparse.ArgumentParser(description='Predict enhancer relative effects.',
-                                     epilog=epilog,
                                      formatter_class=formatter)
     readable = argparse.FileType('r')
 
     #Basic parameters
-    parser.add_argument('--cellType', required=False, help="Name of cell type")
+    parser.add_argument('--cellType', required=True, help="Name of cell type")
     parser.add_argument('--nbhd_directory', help="Directory with neighborhoods files")
     parser.add_argument('--outdir', required=True, help="output directory")
-    parser.add_argument('--params_file', help="Parameters file")
+    parser.add_argument('--params_file', help="Cell type parameters file")
     parser.add_argument('--genes', type=readable, required=False, help="Table of genes for which predictions should be made. Overrides GeneList.txt in neighborhoods directory")
-    parser.add_argument('--HiC_directory_listing', default="", help="File mapping cell names to hic directories")
     parser.add_argument('--window', type=int, default=5000000, help="Make predictions for all enhancers within this distance of the gene's TSS")
     parser.add_argument('--threshold', type=float, required=True, default=None, help="Threshold on ABC Score to call a predicted positive")
 
     #qnorm
-    parser.add_argument('--qnorm', default='', help="json file containing to quantile normalize epigenetica data to")
+    parser.add_argument('--qnorm', default='', help="json file used for quantile normalizing epigenetic data")
 
     #hic
     parser.add_argument('--HiCdir', help="Directory with hic bedgraphs")
@@ -42,13 +34,13 @@ def get_model_argument_parser():
 
     #Power law
     parser.add_argument('--scale_hic_using_powerlaw', action="store_true", help="Scale Hi-C values using powerlaw relationship")
-    parser.add_argument('--hic_gamma', type=float, default=1, help="powerlaw exponent of hic_cell_type. Must be positive")
+    parser.add_argument('--hic_gamma', type=float, default=1, help="powerlaw exponent of hic data. Must be positive")
     parser.add_argument('--hic_gamma_reference', type=float, default=1, help="powerlaw exponent to scale to. Must be positive")
 
     #Genes to run through model
     parser.add_argument('--run_all_genes', action='store_true', help="Do not check for gene expression, make predictions for all genes")
     parser.add_argument('--expression_cutoff', type=float, default=1, help="Make predictions for genes with expression higher than this value")
-    parser.add_argument('--promoter_activity_quantile_cutoff', type=float, default=.4, help="Quantile cutoff on promoter activity")
+    parser.add_argument('--promoter_activity_quantile_cutoff', type=float, default=.4, help="Quantile cutoff on promoter activity. Used to consider a gene 'expressed' in the absence of expression data")
 
     #Output formatting
     parser.add_argument('--skip_gene_files', action="store_true", help="Do not make individual gene files")
@@ -143,7 +135,7 @@ def main():
             
             gene_is_expressed_proxy = check_gene_for_runnability(gene, args.expression_cutoff, args.promoter_activity_quantile_cutoff)
             if args.run_all_genes or gene_is_expressed_proxy:
-                positives = nearby_enhancers.ix[nearby_enhancers[args.score_column] >= args.threshold,:]
+                positives = nearby_enhancers.ix[np.logical_and(nearby_enhancers[args.score_column] >= args.threshold, nearby_enhancers["class"] != "promoter"),:]
                 print("{} enhancers predicted for {}".format(positives.shape[0], gene["name"]))
                 all_positive_list.append(positives)
 
@@ -163,7 +155,7 @@ def main():
     if args.score_column is not None:
         all_positive = pd.concat(all_positive_list)
         all_positive.to_csv(pred_file, sep="\t", index=False, header=True, float_format="%.4f")
-        write_connections_bedpe_format(all_positive.loc[all_positive["class"] != "promoter"], outfile=os.path.join(args.outdir, "Predictions_nopromoters.bedpe"), score_column=args.score_column)
+        write_connections_bedpe_format(all_positive, outfile=os.path.join(args.outdir, "Predictions.bedpe"), score_column=args.score_column)
 
     gene_stats = pd.concat(gene_stats, axis=1).T
     gene_stats.to_csv(os.path.join(args.outdir, "GenePredictionStats.txt"), sep="\t", index=False)
