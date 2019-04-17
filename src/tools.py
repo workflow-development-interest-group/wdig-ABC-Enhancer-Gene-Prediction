@@ -9,9 +9,6 @@ import re
 from subprocess import check_call
 import sys
 
-#TO DO:
-# Get rid of reuse
-
 # setting this to raise makes sure that any dangerous assignments to pandas
 # dataframe slices/subsets error rather than warn
 pandas.set_option('mode.chained_assignment', 'raise')
@@ -162,9 +159,3 @@ def check_gene_for_runnability(gene, expression_cutoff, activity_quantile_cutoff
     should_run = (gene.expressed is True) or (missing_expression and is_active)
 
     return(should_run)
-
-def reuse(package):
-    if 'wme3a' in os.uname()[1].lower():
-        return ""  # Ray's machine
-    return ("source /broad/software/scripts/useuse; reuse -q {}; ".format(package))
-

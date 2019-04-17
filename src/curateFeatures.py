@@ -32,11 +32,6 @@ def parseargs(required_args=True):
     parser.add_argument('--regions_whitelist', default="", help="Bed file of regions to forcibly include in candidate enhancers. Overrides regions_blacklist")
     parser.add_argument('--regions_blacklist', default="", help="Bed file of regions to forcibly exclude from candidate enhancers")
     
-    #vplot
-    parser.add_argument('--make_vplot', action="store_true", help = "Do not run vplot")
-    parser.add_argument('--tss_file', default="/seq/lincRNA/Jesse/bin/scripts/TSSfiles/hg19.noY.TSS.bed", help="Bed file for TSS enrichment computation")
-    parser.add_argument('--extension', default=1000, help="bp extension to use for v plot and tss enrichment")
-    
     args = parser.parse_args()
     return(args)
 
@@ -83,14 +78,6 @@ def processCellType(cellType, args):
 												peak_extend = args.peakExtendFromSummit, 
 												outdir = args.outDir)
 			qc_stats['candidate_region_file'] = os.path.join(args.outDir, os.path.basename(qc_stats['peak_file'].values[0]) + ".candidateRegions.bed")
-
-		#Vplot
-		if args.make_vplot:
-			try:
-				qc_stats['tss_vplot_score'] = make_v_plot(this_file, args.tss_file, os.path.join(args.outDir, cellType, this_file + ".v_plot"), args.extension)
-			except Exception as e:
-				print(e)
-				qc_stats['tss_vplot_score'] = np.nan
 
 		#Count Reads 
 		try:

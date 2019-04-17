@@ -5,9 +5,6 @@ import os.path
 from tools import *
 from neighborhoods import *
 
-# To Do
-# 1. Add TSS1Kb regions
-
 def run_macs2_callpeak(infile, outdir, outfile_prefix, MACS_format, pval_cutoff, genome_sizes, force=False):
 
 	if force or (not os.path.exists(os.path.join(outdir, outfile_prefix + '_peaks.narrowPeak'))) or (os.path.getsize(os.path.join(outdir, outfile_prefix + '_peaks.narrowPeak')) == 0):
@@ -16,23 +13,17 @@ def run_macs2_callpeak(infile, outdir, outfile_prefix, MACS_format, pval_cutoff,
 		if infile.endswith(".bgz"):
 			remove_tmp = True
 			tmpfile = infile.replace(".bgz", ".tmp.gz")
-			run_command(reuse("Tabix") + "bgzip -cd {} | gzip > {}".format(infile, tmpfile))
+			run_command("bgzip -cd {} | gzip > {}".format(infile, tmpfile))
 			infile = tmpfile
 
-		macs_command = reuse("MACS2") + "macs2 callpeak -t {} -n {} -f {} -g hs -p {} --call-summits --outdir {}".format(infile, outfile_prefix, MACS_format, pval_cutoff, outdir)
+		macs_command = "macs2 callpeak -t {} -n {} -f {} -g hs -p {} --call-summits --outdir {}".format(infile, outfile_prefix, MACS_format, pval_cutoff, outdir)
 		print("Running: {}".format(macs_command))
 		p = Popen(macs_command, stdout=PIPE, stderr=PIPE, shell=True)
 		(stdoutdata, stderrdata) = p.communicate()
 
-		#sort peaks file
-		# sort_command = reuse("BEDTools") + "bedtools sort -faidx {} -i {} > {}".format(genome_sizes, outfile  + '_peaks.narrowPeak', outfile + '_peaks.narrowPeak.sorted')
-		# print("Running: {}".format(sort_command))
-		# p = Popen(sort_command, stdout=PIPE, stderr=PIPE, shell=True)
-		# (stdoutdata, stderrdata) = p.communicate()
-
 		outfile = os.path.join(outdir, outfile_prefix  + '_peaks.narrowPeak')
 
-		sort_command = reuse("BEDTools") + "bedtools sort -faidx {} -i {} > {} ; mv {} {}; ".format(genome_sizes, outfile, outfile + '.tmp', outfile + '.tmp', outfile)
+		sort_command = "bedtools sort -faidx {} -i {} > {} ; mv {} {}; ".format(genome_sizes, outfile, outfile + '.tmp', outfile + '.tmp', outfile)
 		print("Running: {}".format(sort_command))
 		p = Popen(sort_command, stdout=PIPE, stderr=PIPE, shell=True)
 		(stdoutdata, stderrdata) = p.communicate()
@@ -42,31 +33,31 @@ def run_macs2_callpeak(infile, outdir, outfile_prefix, MACS_format, pval_cutoff,
 	else:
 		print('{}_peaks.narrowPeak already exists. Not recreating'.format(outfile_prefix))
 
-def make_v_plot(bamfile, bedfile, out, extension):
-	print("Making v plot for file {}...".format(bamfile))
-	command = reuse("Python-2.7") + "python /seq/lincRNA/Jesse/bin/scripts/pyMakeVplot_JN.py -a {} -b {} -c 4 -o {} -e {} -p ends -v -u".format(bamfile, bedfile, out, extension)
-	print("Running: {}".format(command))
+# def make_v_plot(bamfile, bedfile, out, extension):
+# 	print("Making v plot for file {}...".format(bamfile))
+# 	command = reuse("Python-2.7") + "python /seq/lincRNA/Jesse/bin/scripts/pyMakeVplot_JN.py -a {} -b {} -c 4 -o {} -e {} -p ends -v -u".format(bamfile, bedfile, out, extension)
+# 	print("Running: {}".format(command))
 
-	p = Popen(command, stdout=PIPE, stderr=PIPE, shell=True)
-	(stdoutdata, stderrdata) = p.communicate()
+# 	p = Popen(command, stdout=PIPE, stderr=PIPE, shell=True)
+# 	(stdoutdata, stderrdata) = p.communicate()
 
-	err = str(stderrdata, 'utf-8')
-	print(err)
+# 	err = str(stderrdata, 'utf-8')
+# 	print(err)
 
-	if "Error" not in err:
-		data = pd.read_table(out, header=None)
+# 	if "Error" not in err:
+# 		data = pd.read_table(out, header=None)
 
-		window = 20
-		avg = np.convolve(data.ix[:,0], np.ones(window), 'same')/window/np.mean(data.ix[1:200,0]) #20bp moving average
-		#tss_enrichment = avg[1000]
-		tss_enrichment = np.amax(avg)
+# 		window = 20
+# 		avg = np.convolve(data.ix[:,0], np.ones(window), 'same')/window/np.mean(data.ix[1:200,0]) #20bp moving average
+# 		#tss_enrichment = avg[1000]
+# 		tss_enrichment = np.amax(avg)
 
-		print("Done computing v plot. TSS enrichment = {}".format(tss_enrichment))
-	else:
-		tss_enrichment = np.nan
-		print("Making vplot failed. Error is: ".format(err))
+# 		print("Done computing v plot. TSS enrichment = {}".format(tss_enrichment))
+# 	else:
+# 		tss_enrichment = np.nan
+# 		print("Making vplot failed. Error is: ".format(err))
 
-	return(tss_enrichment)
+# 	return(tss_enrichment)
 
 def make_candidate_regions_from_summits(macs_peaks, accessibility_file, genome_sizes, regions_whitelist, regions_blacklist, n_enhancers, peak_extend, outdir):
     ## Generate enhancer regions from MACS summits
@@ -91,8 +82,7 @@ def make_candidate_regions_from_summits(macs_peaks, accessibility_file, genome_s
 
     #2. Take top N regions, get summits, extend summits, merge, remove blacklist, add whitelist, sort and merge
     #use -sorted in intersect command? Not worth it, both files are small
-    command = reuse(".bedtools-2.26.0") + \
-        "bedtools sort -i {raw_counts_outfile} -faidx {genome_sizes} | bedtools merge -i stdin -c 4 -o max | sort -nr -k 4 | head -n {n_enhancers} |" + \
+    command = "bedtools sort -i {raw_counts_outfile} -faidx {genome_sizes} | bedtools merge -i stdin -c 4 -o max | sort -nr -k 4 | head -n {n_enhancers} |" + \
         "bedtools intersect -b stdin -a {macs_peaks} -wa |" + \
         "awk '{{print $1 \"\\t\" $2 + $10 \"\\t\" $2 + $10}}' |" + \
         "bedtools slop -i stdin -b {peak_extend} -g {genome_sizes} |" + \

@@ -6,10 +6,6 @@ import pandas as pd
 import numpy as np
 import sys, traceback, os, os.path
 
-# To Do:
-# 2. Read HiC resolution from hic.listing file
-# 3. Review qnorm (how to qnorm ATAC)
-
 def get_model_argument_parser():
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
         pass
@@ -67,7 +63,6 @@ def get_model_argument_parser():
 
 def get_predict_argument_parser():
     parser = get_model_argument_parser()
-    #parser = add_predict_args(parser)
     return parser
 
 
@@ -138,8 +133,6 @@ def main():
 
         try:
             nearby_enhancers = enhancers.within_range(gene.chr, gene.tss - args.window, gene.tss + args.window)
-            #predictor.add_normalized_data_to_enhancers(gene, nearby_enhancers, domains, loops=None, tss_slop=args.tss_slop)
-            #predictor.add_normalized_data_to_enhancers(gene, nearby_enhancers, tss_slop=args.tss_slop)
             predictor.predict_from_normalized_to_enhancers(nearby_enhancers, gene, args.window, tss_slop=args.tss_slop)
             
             col_names=['chr','start','end','TargetGene','TargetGeneTSS','class','Score.Fraction','Score','distance','hic.distance','hic.distance.adj','estimatedCP','estimatedCP.adj','normalized_dhs','normalized_h3k27ac','TargetGeneExpression','TargetGeneTSSActivityQuantile']
@@ -164,10 +157,6 @@ def main():
                 stats['prediction_file'] = get_score_filename(gene)
                 stats['gene_is_expressed_proxy'] = gene_is_expressed_proxy
                 gene_stats.append(stats)
-
-            #THINK about whether this is the right thing to do
-            # if any(nearby_enhancers[args.score_column].isnull().tolist()):
-            #     failed_genes.append(gene["chr"] + "\t" + gene["name"])
 
         except:
             failed_genes.append(gene["chr"] + "\t" + gene["name"])

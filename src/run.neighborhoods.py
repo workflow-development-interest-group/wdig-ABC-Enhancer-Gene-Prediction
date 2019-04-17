@@ -3,10 +3,6 @@ import os
 from neighborhoods import *
 from subprocess import getoutput
 
-#TODO
-#4. Look at JAVA bam file counting code
-#5. Look at how peak file is loaded. Also change the name of this column
-
 def parseargs(required_args=True):
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
         pass
