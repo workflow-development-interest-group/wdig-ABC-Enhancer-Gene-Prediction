@@ -35,6 +35,7 @@ def get_model_argument_parser():
     parser.add_argument('--qnorm', default='', help="json file containing to quantile normalize epigenetica data to")
 
     #hic
+    parser.add_argument('--HiCdir', help="Directory with hic bedgraphs")
     parser.add_argument('--hic_cap', type=float, default=100, help="HiC cap (in normalized units 0-100)")
     parser.add_argument('--tss_hic_contribution', type=float, default=100, help="Weighting of diagonal bin of hic matrix as a percentage of its neighbors")
     parser.add_argument('--hic_pseudocount_distance', type=int, default=1e6, help="A pseudocount is added equal to the powerlaw fit at this distance")
@@ -75,11 +76,6 @@ def parse_cell_type_args(args, cellType):
     if args.genes is None:
         args.genes = os.path.join(args.nbhd_directory, "GeneList.txt")
      
-    #HiC Params
-    hic_cell_type = file_params['hic_cell_type'].values[0]
-    hic_listing = pd.read_csv(args.HiC_directory_listing, sep="\t")
-    args.HiCdir = hic_listing.loc[hic_listing["cell_type"] == hic_cell_type, "directory"].values[0]
-    
     return args
 
 def main():
