@@ -1,2 +1,0 @@
-cell_type	directory
-K562	example/input_data/HiC/bedgraph/
