@@ -38,9 +38,8 @@ def load_genes(file,
                 expr = pd.read_table(expression_table, names=[primary_id, name + '.Expression'])
                 expr[name + '.Expression'] = expr[name + '.Expression'].astype(float)
                 expr = expr.groupby(primary_id).max()
-                expr['symbol'] = expr.index.values
 
-                genes = genes.merge(expr, how="left", on=primary_id)
+                genes = genes.merge(expr, how="left", right_index=True, left_on='symbol')
                 names_list.append(name + '.Expression')
             except Exception as e:
                 print(e)
