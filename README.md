@@ -99,7 +99,7 @@ mkdir -p $PREDDIR
 ### Step 2. Quantifying Enhancer Activity: 
 NOTE: This section assumes candidate enhancer elements have already been defined (See below section on defining candidate elements)
 
-```run.neighborhoods.py``` will count DNase-seq (or ATAC-seq) and H3K27ac ChIP-seq reads in candidate enhancer regions. It also makes GeneList.txt.
+```run.neighborhoods.py``` will count DNase-seq (or ATAC-seq) and H3K27ac ChIP-seq reads in candidate enhancer regions. It also makes GeneList.txt, which includes data about genes and their promoters.
 
 Sample Command:
 
@@ -127,7 +127,8 @@ python src/predict.py \
 ```
 
 The main output file is $PREDDIR/EnhancerPredictions.txt.
-It contains all element-gene connections with ABC.score greater than the threshold. The default threshold of 0.022 corresponds to 70% recall and 74% precision in the Fulco et al 2019 dataset.
+It contains all element-gene connections with ABC.score greater than the threshold. The default threshold of 0.022 corresponds to 70% recall and 63% precision in the Fulco et al 2019 dataset.
+Columns are further defined in https://docs.google.com/spreadsheets/d/1UfoVXoCxUpMNPfGypvIum1-RvS07928grsieiaPX67I/edit?usp=sharing
 
 ## Defining Candidate Enhancers
 'Candidate elements' are the set of putative enhancers for which ABC scores will be computed. In computing the ABC score, the sum of DNase-seq (or ATAC-seq) and H3K27ac ChIP-seq reads will be counted in the candidate element. Thus the candidate elements should be regions of open (nucleasome depleted) chromatin of sufficient length to capture H3K27ac marks on flanking nucleosomes. In Fulco et al 2019, we defined candidate regions to be 500 bp (150bp of the DHS peak extended 175bp in each direction). 
@@ -180,9 +181,6 @@ In the case where cell-type specific Hi-C data is available, we provide a pipeli
 * For each gene, generate an average bedgraph profile by averaging together the bedgraphs from all ten cell types
 
 
-### Description of Hi-C processing
-pseudocount, powerlaw normalization, kr norm entry, 
-
 ### Pipeline to Download and Format Hi-C data
 
 When predicting enhancers for a specific gene, the ABC model requires the row of the hic matrix corresponding to the TSS of the gene (given as a begraph). The below pipeline will download a Hi-C matrix from Juicebox (in .hic format) and generate tss-anchored bedgraphs.
@@ -231,10 +229,8 @@ In the absence of expression data, DNase-seq and H3K27ac ChIP-seq at the gene pr
 
 ## Tips and Suggestions
 
-* Accurate transcription start site annotations are critical
-* Candidate region size is important to consider
+* Accurate transcription start site annotations are critical.
 * We have found that ubiquitously expressed genes appear insensitive to the effects of distal enhancers. For completeness, this code calculates the ABC score for all genes and flags ubiquitously expressed genes.
-* Threshold vs sensitivity/specificity vs number/size of elements and signal-to-noise ratio of the epigenetic data
 
 ## Citation
 
