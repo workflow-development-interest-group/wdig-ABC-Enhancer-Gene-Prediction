@@ -15,13 +15,14 @@ pd.options.display.max_colwidth = 10000 #seems to be necessary for pandas to rea
 
 def load_genes(file,
                ue_file,
+               chrom_sizes,
                outdir,
                expression_table_list,
                gene_id_names,
                primary_id):
 
     bed = read_bed(file) 
-    genes = process_gene_bed(bed, gene_id_names, primary_id)
+    genes = process_gene_bed(bed, gene_id_names, primary_id, chrom_sizes)
 
     genes[['chr', 'start', 'end', 'name', 'score', 'strand']].to_csv(os.path.join(outdir, "GeneList.bed"),
                                                                     sep='\t', index=False, header=False)
@@ -30,7 +31,10 @@ def load_genes(file,
         # # Add expression information
 
         names_list = []
-        print("Using gene expression from files: {}".format(expression_table_list))
+        print("Using gene expression from files: {} \n".format(expression_table_list))
+
+        # import pdb
+        # pdb.set_trace()
 
         for expression_table in expression_table_list:
             try:
@@ -63,6 +67,7 @@ def annotate_genes_with_features(genes, genome,
                features={},
                outdir=".",
                force=False,
+               use_fast_count=True,
                **kwargs):
 
     #file = genome['genes']
@@ -77,8 +82,16 @@ def annotate_genes_with_features(genes, genome,
     tss1kb_file = os.path.join(outdir, "GeneList.TSS1kb.bed")
     tss1kb.to_csv(tss1kb_file, header=False, index=False, sep='\t')
 
-    genes = count_features_for_bed(genes, bounds_bed, genome_sizes, features, outdir, "Genes", force=force)
-    tsscounts = count_features_for_bed(tss1kb, tss1kb_file, genome_sizes, features, outdir, "Genes.TSS1kb", force=force)
+    #The TSS1kb file should be sorted
+    sort_command = "bedtools sort -faidx {genome_sizes} -i {tss1kb_file} > {tss1kb_file}.sorted; mv {tss1kb_file}.sorted {tss1kb_file}; rm {tss1kb_file}.sorted".format(**locals())
+    p = Popen(sort_command, stdout=PIPE, stderr=PIPE, shell=True)
+    print("Sorting Genes.TSS1kb file. \n Running: " + sort_command + "\n")
+    (stdoutdata, stderrdata) = p.communicate()
+    err = str(stderrdata, 'utf-8')
+
+    #Count features over genes and promoters
+    genes = count_features_for_bed(genes, bounds_bed, genome_sizes, features, outdir, "Genes", force=force, use_fast_count=use_fast_count)
+    tsscounts = count_features_for_bed(tss1kb, tss1kb_file, genome_sizes, features, outdir, "Genes.TSS1kb", force=force, use_fast_count=use_fast_count)
     tsscounts = tsscounts.drop(['chr','start','end','score','strand'], axis=1)
 
     merged = genes.merge(tsscounts, on="name", suffixes=['','.TSS1Kb'])
@@ -87,7 +100,7 @@ def annotate_genes_with_features(genes, genome,
     merged['PromoterActivityQuantile'] = ((0.0001+merged['H3K27ac.RPKM.quantile.TSS1Kb'])*(0.0001+merged[access_col])).rank(method='average', na_option="top", ascending=True, pct=True)
     return merged
 
-def process_gene_bed(bed, name_cols, main_name):
+def process_gene_bed(bed, name_cols, main_name, chrom_sizes):
 
     try:
         bed = bed.drop(['thickStart','thickEnd','itemRgb','blockCount','blockSizes','blockStarts'], axis=1)
@@ -107,6 +120,13 @@ def process_gene_bed(bed, name_cols, main_name):
     bed['tss'] = get_tss_for_bed(bed)
 
     bed.drop_duplicates(inplace=True)
+
+    #Remove genes that are not defined in chromosomes file
+    sizes = read_bed(chrom_sizes)
+    bed = bed[bed['chr'].isin(set(sizes['chr'].values))]
+
+    #Enforce that gene names should be unique
+    assert(len(set(bed['name'])) == len(bed['name'])), "Gene IDs are not unique! Failing. Please ensure unique identifiers are passed to --genes"
 
     return bed
 
@@ -136,12 +156,13 @@ def load_enhancers(outdir=".",
                    cellType="",
                    additional_gene_annot=None,
                    tss_slop_for_class_assignment = 500,
+                   use_fast_count=True,
                    **kwargs):
 
     enhancers = read_bed(candidate_peaks)
     enhancers = enhancers.ix[~ (enhancers.chr.str.contains(re.compile('random|chrM|_|hap|Un')))]
 
-    enhancers = count_features_for_bed(enhancers, candidate_peaks, genome_sizes, features, outdir, "Enhancers", skip_rpkm_quantile, force)
+    enhancers = count_features_for_bed(enhancers, candidate_peaks, genome_sizes, features, outdir, "Enhancers", skip_rpkm_quantile, force, use_fast_count)
 
     # Assign categories
     if genes is not None:
@@ -190,9 +211,9 @@ def assign_enhancer_classes(enhancers, genes, tss_slop=500):
     enhancers["name"] = enhancers.apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
     return(enhancers)
 
-def run_count_reads(target, output, bed_file, genome_sizes):
+def run_count_reads(target, output, bed_file, genome_sizes, use_fast_count):
     if target.endswith(".bam"):
-        count_bam(target, bed_file, output, genome_sizes=genome_sizes)
+        count_bam(target, bed_file, output, genome_sizes=genome_sizes, use_fast_count=use_fast_count)
     elif target.endswith(".tagAlign.gz") or target.endswith(".tagAlign.bgz"):
         count_tagalign(target, bed_file, output, genome_sizes)
     elif isBigWigFile(target):
@@ -293,7 +314,7 @@ def count_bigwig(target, bed_file, output):
 def isBigWigFile(filename):
     return(filename.endswith(".bw") or filename.endswith(".bigWig") or filename.endswith(".bigwig"))
 
-def count_features_for_bed(df, bed_file, genome_sizes, features, directory, filebase, skip_rpkm_quantile=False, force=False):
+def count_features_for_bed(df, bed_file, genome_sizes, features, directory, filebase, skip_rpkm_quantile=False, force=False, use_fast_count=True):
 
     for feature, feature_bam_list in features.items():
         start_time = time.time()
@@ -301,7 +322,7 @@ def count_features_for_bed(df, bed_file, genome_sizes, features, directory, file
             feature_bam_list = [feature_bam_list]
 
         for feature_bam in feature_bam_list:
-            df = count_single_feature_for_bed(df, bed_file, genome_sizes, feature_bam, feature, directory, filebase, skip_rpkm_quantile, force)
+            df = count_single_feature_for_bed(df, bed_file, genome_sizes, feature_bam, feature, directory, filebase, skip_rpkm_quantile, force, use_fast_count)
 
         df = average_features(df, feature.replace('feature_',''), feature_bam_list, skip_rpkm_quantile)
         elapsed_time = time.time() - start_time
@@ -309,7 +330,7 @@ def count_features_for_bed(df, bed_file, genome_sizes, features, directory, file
 
     return df
 
-def count_single_feature_for_bed(df, bed_file, genome_sizes, feature_bam, feature, directory, filebase, skip_rpkm_quantile, force):
+def count_single_feature_for_bed(df, bed_file, genome_sizes, feature_bam, feature, directory, filebase, skip_rpkm_quantile, force, use_fast_count):
     orig_shape = df.shape[0]
     feature_name = feature + "." + os.path.basename(feature_bam)
     feature_outfile = os.path.join(directory, "{}.{}.CountReads.bed".format(filebase, feature_name))
@@ -317,7 +338,7 @@ def count_single_feature_for_bed(df, bed_file, genome_sizes, feature_bam, featur
     if force or (not os.path.exists(feature_outfile)) or (os.path.getsize(feature_outfile) == 0):
         print("Regenerating", feature_outfile)
         print("Counting coverage for {}".format(filebase + "." + feature_name))
-        run_count_reads(feature_bam, feature_outfile, bed_file, genome_sizes)
+        run_count_reads(feature_bam, feature_outfile, bed_file, genome_sizes, use_fast_count)
     else:
         print("Loading coverage from pre-calculated file for {}".format(filebase + "." + feature_name))
 
