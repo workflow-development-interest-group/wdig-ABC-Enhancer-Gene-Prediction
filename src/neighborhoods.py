@@ -58,16 +58,17 @@ def load_genes(file,
     return genes
 
 
-def annotate_genes_with_features(genes, genome, 
-               skip_gene_counts=False,
-               features={},
-               outdir=".",
-               force=False,
-               use_fast_count=True,
-               **kwargs):
+def annotate_genes_with_features(genes, 
+           genome_sizes,
+           skip_gene_counts=False,
+           features={},
+           outdir=".",
+           force=False,
+           use_fast_count=True,
+           **kwargs):
 
     #file = genome['genes']
-    genome_sizes = genome['sizes']
+    #genome_sizes = genome['sizes']
     bounds_bed = os.path.join(outdir, "GeneList.bed")
     #tss1kb_file = file + '.TSS1kb.bed'
 
@@ -143,14 +144,9 @@ def load_enhancers(outdir=".",
                    features={},
                    genes=None,
                    force=False,
-                   active_col="",
-                   quantile_cutoff=0.5,
                    candidate_peaks="",
-                   skip_originalPeaks=False,
-                   compute_custom_features=False,
                    skip_rpkm_quantile=False,
-                   cellType="",
-                   additional_gene_annot=None,
+                   #cellType="",
                    tss_slop_for_class_assignment = 500,
                    use_fast_count=True,
                    **kwargs):
@@ -434,46 +430,41 @@ def count_total(infile):
 
     return total_counts
 
-def make_features_from_param_df(df, supp=None):
+def parse_params_file(args):
+    # Parse parameters file and return params dictionary
+    params = {}
+
+    params["default_accessibility_feature"] = determine_accessibility_feature(args)
+    params["features"] = make_features_from_param_df(args)
+
+    if args.expression_table is not None:
+        params["expression_table"] = args.expression_table.split(",")
+    else:
+        params["expression_table"] = ''
+
+    return(params)
+
+def make_features_from_param_df(args):
     features = {}
-
-    features['H3K27ac'] = df['feature_H3K27ac'].to_string(index=False).split(",")
-
-    #Note that even if ATAC is not the default accessibilty feature, we still want to count it, as long as there is an ATAC file
-    if ('feature_ATAC' in df.columns) and (not all(df['feature_ATAC'].isnull())):
-        features['ATAC'] = df['feature_ATAC'].to_string(index=False).split(",")
-
-    if ('feature_DHS' in df.columns) and not all(df['feature_DHS'].isnull()):
-        features['DHS'] = df['feature_DHS'].to_string(index=False).split(",")
-
-    if supp is not None:
-        #supp = pd.read_csv(supp_file, sep="\t")
-        for idx,row in supp.iterrows():
-
-            #Checks to make sure supplemental feature is not df already. This is useful for H3K27ac so it doesn't appear twice
-            if row['feature_name'] not in features.keys():
-                features[row['feature_name']] = row['file'].split(",")
-            else:
-                print("{} Already exists. Skipping adding as supplemental feature!".format(row['feature_name']))
+    features['H3K27ac'] = args.H3K27ac.split(",")
+    
+    if args.ATAC is not None:
+        features['ATAC'] = args.ATAC.split(",")
+    
+    if args.DHS is not None:
+        features['DHS'] = args.DHS.split(",")
 
     return features
 
-def parse_params_file(cellType, args):
-    # Parse parameters file and return params dictionary
-    params_from_file = pd.read_csv(args.params_file, sep="\t")
-    params_df = params_from_file.loc[params_from_file["cell_type"] == cellType, :]
-
-    params = {}
-    params["genome_build"] = params_df["genome"].values[0]
-    params["quantile_cutoff"] = 0
-    params["default_accessibility_feature"] = params_df["default_accessibility_feature"].values[0]
-    
-    params["features"] = make_features_from_param_df(params_df)
-
-    #RNA Seq    
-    if (params_df["RNA_tpm_file"].tolist() == 'NA' or params_df["RNA_tpm_file"].isnull().values.all()):
-        params["expression_table"] = ''
+def determine_accessibility_feature(args):
+    if args.default_accessibility_feature is not None:
+        return args.default_accessibility_feature
+    elif (args.ATAC is not None) and (args.DHS is not None):
+        raise RuntimeError("Both DHS and ATAC have been provided. Must set one file to be the default accessibility feature!")
+    elif (args.ATAC is not None):
+        return "ATAC"
+    elif (args.DHS is not None):
+        return "DHS"
     else:
-        params["expression_table"] = params_df["RNA_tpm_file"].tolist()[0].split(",")
+        raise RuntimeError("At least one of ATAC or DHS must be provided!")
 
-    return(params)
