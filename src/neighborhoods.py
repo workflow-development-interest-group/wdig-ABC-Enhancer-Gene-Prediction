@@ -28,13 +28,9 @@ def load_genes(file,
                                                                     sep='\t', index=False, header=False)
 
     if len(expression_table_list) > 0:
-        # # Add expression information
-
+        # Add expression information
         names_list = []
         print("Using gene expression from files: {} \n".format(expression_table_list))
-
-        # import pdb
-        # pdb.set_trace()
 
         for expression_table in expression_table_list:
             try:
@@ -402,12 +398,6 @@ def read_bed(filename, extra_colnames=bed_extra_colnames, chr=None, sort=False, 
 
 def read_bedgraph(filename):
     read_bed(filename, extra_colnames=["score"], skip_chr_sorting=True)
-
-
-# def read_count_reads(file, chr=None, sort=False):
-#     return read_bed(file, chr=chr, sort=sort,
-#                     extra_colnames=bed_extra_colnames + ["count", "rpkm", "regionTotal", "total", "length"])
-
 
 def count_bam_mapped(bam_file):
     # Counts number of reads in a BAM file WITHOUT iterating.  Requires that the BAM is indexed

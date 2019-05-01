@@ -95,8 +95,8 @@ class Predictor(object):
         enhancers['hic.distance.unscaled'] = hic_vals_unscaled
         enhancers['hic.rowmax.unscaled'] = rowmax_unscaled
 
-        #Normalize Hi-C
-        enhancers['hic.distance.adj'], enhancers['hic_adjustment'] = self.normalize_proximity_hic(enhancers['distance'], 
+        #add hic pseudocount
+        enhancers['hic.distance.adj'], enhancers['hic_adjustment'] = self.add_hic_pseudocount(enhancers['distance'], 
                                                                                                     enhancers['hic.distance'], 
                                                                                                     enhancers['hic.rowmax'], 
                                                                                                     hic_pseudocount_distance=self.hic_pseudocount_distance)
@@ -117,11 +117,7 @@ class Predictor(object):
     def __call__(self, *args, **kwargs):
         return self.predict(*args, **kwargs)
 
-    def normalize_proximity_hic(self, dists, hic_vals, hic_rowmax, hic_pseudocount_distance=1e6, debug=False):
-        if debug:
-            import pdb
-            pdb.set_trace()
-
+    def add_hic_pseudocount(self, dists, hic_vals, hic_rowmax, hic_pseudocount_distance=1e6):
         powerlaw_cp, cp_rowmax = self.estimate_contact_probability_from_distance(dists)
         cp_at_distance = self.estimate_contact_probability_from_distance(hic_pseudocount_distance)[0]
         adjustment = np.minimum(100 * (cp_at_distance / cp_rowmax), 100 * (powerlaw_cp / cp_rowmax))

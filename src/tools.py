@@ -84,19 +84,6 @@ class GenomicRangesIntervalTree(object):
 def read_enhancers(filename):
     return GenomicRangesIntervalTree(filename)
 
-def get_genome_sizes_from_bam(filename):
-    bamfile = pysam.Samfile(filename, "r")
-    sizes = pandas.DataFrame({'chr': bamfile.references, 'length': bamfile.lengths})
-    bamfile.close()
-    return sizes
-
-
-def read_genome_sizes(filename):
-    tab = pandas.read_table(filename, names=['chr', 'length'], header=None)
-    # sizes = OrderedDict(zip(tab['chr'],tab['length']))
-    return tab
-
-
 class DataCache(object):
     def __init__(self, directory):
         os.makedirs(directory, exist_ok=True)

@@ -40,8 +40,6 @@ class HiCFetcher(object):
     def query(self, chr, row, cols, enhancers, debug=False):
         intervals = list(self.file_intervals[chr][(row - self.resolution):(row + self.resolution)])
         if len(intervals) == 0:
-            #raise RuntimeError("Could not find HiC data for {}:{}".format(chr, row))
-            # return [0] * len(cols), 100
             print("Could not find HiC data for {}:{}".format(chr, row))
             return np.full([len(cols), ], np.nan), np.nan, False, np.nan, np.nan
 
