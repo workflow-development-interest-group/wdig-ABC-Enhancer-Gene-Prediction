@@ -65,6 +65,7 @@ def annotate_genes_with_features(genes,
            outdir=".",
            force=False,
            use_fast_count=True,
+           default_accessibility_feature = "",
            **kwargs):
 
     #file = genome['genes']
@@ -93,7 +94,7 @@ def annotate_genes_with_features(genes,
 
     merged = genes.merge(tsscounts, on="name", suffixes=['','.TSS1Kb'])
 
-    access_col = kwargs["default_accessibility_feature"] + ".RPKM.quantile.TSS1Kb"  
+    access_col = default_accessibility_feature + ".RPKM.quantile.TSS1Kb"  
     merged['PromoterActivityQuantile'] = ((0.0001+merged['H3K27ac.RPKM.quantile.TSS1Kb'])*(0.0001+merged[access_col])).rank(method='average', na_option="top", ascending=True, pct=True)
     return merged
 
@@ -149,12 +150,15 @@ def load_enhancers(outdir=".",
                    #cellType="",
                    tss_slop_for_class_assignment = 500,
                    use_fast_count=True,
-                   **kwargs):
+                   default_accessibility_feature = ""):
 
     enhancers = read_bed(candidate_peaks)
     enhancers = enhancers.ix[~ (enhancers.chr.str.contains(re.compile('random|chrM|_|hap|Un')))]
 
     enhancers = count_features_for_bed(enhancers, candidate_peaks, genome_sizes, features, outdir, "Enhancers", skip_rpkm_quantile, force, use_fast_count)
+
+    #enhancers = run_qnorm(enhancers, qnorm)
+    enhancers = compute_activity(enhancers, default_accessibility_feature)
 
     # Assign categories
     if genes is not None:
@@ -467,4 +471,14 @@ def determine_accessibility_feature(args):
         return "DHS"
     else:
         raise RuntimeError("At least one of ATAC or DHS must be provided!")
+
+def compute_activity(df, access_col):
+    if access_col == "DHS":
+        df['activity_base'] = np.sqrt(df['H3K27ac.RPM'] * df['DHS.RPM'])
+    elif access_col == "ATAC":
+        df['activity_base'] = np.sqrt(df['H3K27ac.RPM'] * df['ATAC.RPM'])
+    else:
+        raise RuntimeError("At least one of ATAC or DHS must be provided!")
+
+    return(df)
 

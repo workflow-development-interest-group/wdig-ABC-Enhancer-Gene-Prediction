@@ -18,13 +18,13 @@ def get_model_argument_parser():
     parser.add_argument('--cellType', required=True, help="Name of cell type")
     parser.add_argument('--nbhd_directory', help="Directory with neighborhoods files")
     parser.add_argument('--outdir', required=True, help="output directory")
-    parser.add_argument('--params_file', help="Cell type parameters file")
+    #parser.add_argument('--params_file', help="Cell type parameters file")
     parser.add_argument('--genes', type=readable, required=False, help="Table of genes for which predictions should be made. Overrides GeneList.txt in neighborhoods directory")
-    parser.add_argument('--window', type=int, default=5000000, help="Make predictions for all enhancers within this distance of the gene's TSS")
+    parser.add_argument('--window', type=int, default=5000000, help="Make predictions for all candidate elements within this distance of the gene's TSS")
     parser.add_argument('--threshold', type=float, required=True, default=None, help="Threshold on ABC Score to call a predicted positive")
 
     #qnorm
-    parser.add_argument('--qnorm', default='', help="json file used for quantile normalizing epigenetic data")
+    #parser.add_argument('--qnorm', default='', help="json file used for quantile normalizing epigenetic data")
 
     #hic
     parser.add_argument('--HiCdir', help="Directory with hic bedgraphs")
@@ -60,9 +60,9 @@ def get_predict_argument_parser():
 
 
 def parse_cell_type_args(args, cellType):
-    file_params = pd.read_table(args.params_file, sep='\t')
-    file_params = file_params.loc[file_params["cell_type"] == cellType, ]
-    args.DHS_column = file_params['default_accessibility_feature'].values[0] + ".RPM"
+    # file_params = pd.read_table(args.params_file, sep='\t')
+    # file_params = file_params.loc[file_params["cell_type"] == cellType, ]
+    # args.DHS_column = file_params['default_accessibility_feature'].values[0] + ".RPM"
 
     args.enhancers = os.path.join(args.nbhd_directory, "EnhancerList.txt")   
     if args.genes is None:
@@ -93,8 +93,8 @@ def main():
     print("building predictor")
     predictor = Predictor(enhancers, **vars(args))
 
-    print("applying qnorm")
-    predictor.add_normalized_data_to_enhancers(enhancers)
+    #print("applying qnorm")
+    #predictor.add_normalized_data_to_enhancers(enhancers)
 
     chromosomes = predictor.chromosomes()
     print("data loaded for chromosomes: {}".format(" ".join(sorted(chromosomes))))

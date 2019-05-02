@@ -26,34 +26,34 @@ class Predictor(object):
         self.distance_model = DistanceModel(model_gamma)
 
         #Epi
-        self.DHS_column = args['DHS_column']
-        self.H3K27ac_column = "H3K27ac.RPM"
+        # self.DHS_column = normalized_dhs#args['DHS_column']
+        # self.H3K27ac_column = "H3K27ac.RPM"
 
         #HiC adjustment parameters
         self.tss_hic_contribution = args['tss_hic_contribution']
         self.hic_pseudocount_distance = args['hic_pseudocount_distance']
         self.hic_cap = args['hic_cap']
 
-        # Quantile normalizations
-        if args['qnorm'] != '':
-            normalizations = json.load(open(args['qnorm'], 'r'))
-            #count = normalizations['count']
-            maxpercentile = normalizations['maxpercentile']
+        # # Quantile normalizations
+        # if args['qnorm'] != '':
+        #     normalizations = json.load(open(args['qnorm'], 'r'))
+        #     #count = normalizations['count']
+        #     maxpercentile = normalizations['maxpercentile']
 
-            self.DHS_normalizer_promoter = make_normalizer(loaded_enhancers.ranges.loc[loaded_enhancers['isPromoterElement'] == True][self.DHS_column].values,
-                                                  normalizations[self.DHS_column + '.PROMOTER'],
-                                                  maxpercentile)
-            self.DHS_normalizer_nonpromoter = make_normalizer(loaded_enhancers.ranges.loc[loaded_enhancers['isPromoterElement'] == False][self.DHS_column].values,
-                                                    normalizations[self.DHS_column + '.NON_PROMOTER'],
-                                                    maxpercentile)
-            self.H3K27ac_normalizer_promoter = make_normalizer(loaded_enhancers.ranges.loc[loaded_enhancers['isPromoterElement'] == True][self.H3K27ac_column].values,
-                                                      normalizations[self.H3K27ac_column + '.PROMOTER'],
-                                                      maxpercentile)
-            self.H3K27ac_normalizer_nonpromoter = make_normalizer(loaded_enhancers.ranges.loc[loaded_enhancers['isPromoterElement'] == False][self.H3K27ac_column].values,
-                                                        normalizations[self.H3K27ac_column + '.NON_PROMOTER'],
-                                                        maxpercentile)
-        else:
-            self.DHS_normalizer_promoter = self.DHS_normalizer_nonpromoter = self.H3K27ac_normalizer_promoter = self.H3K27ac_normalizer_nonpromoter = lambda x: x
+        #     self.DHS_normalizer_promoter = make_normalizer(loaded_enhancers.ranges.loc[loaded_enhancers['isPromoterElement'] == True][self.DHS_column].values,
+        #                                           normalizations[self.DHS_column + '.PROMOTER'],
+        #                                           maxpercentile)
+        #     self.DHS_normalizer_nonpromoter = make_normalizer(loaded_enhancers.ranges.loc[loaded_enhancers['isPromoterElement'] == False][self.DHS_column].values,
+        #                                             normalizations[self.DHS_column + '.NON_PROMOTER'],
+        #                                             maxpercentile)
+        #     self.H3K27ac_normalizer_promoter = make_normalizer(loaded_enhancers.ranges.loc[loaded_enhancers['isPromoterElement'] == True][self.H3K27ac_column].values,
+        #                                               normalizations[self.H3K27ac_column + '.PROMOTER'],
+        #                                               maxpercentile)
+        #     self.H3K27ac_normalizer_nonpromoter = make_normalizer(loaded_enhancers.ranges.loc[loaded_enhancers['isPromoterElement'] == False][self.H3K27ac_column].values,
+        #                                                 normalizations[self.H3K27ac_column + '.NON_PROMOTER'],
+        #                                                 maxpercentile)
+        # else:
+        #     self.DHS_normalizer_promoter = self.DHS_normalizer_nonpromoter = self.H3K27ac_normalizer_promoter = self.H3K27ac_normalizer_nonpromoter = lambda x: x
 
     def estimate_contact_probability_from_distance(self, distance):
         return self.distance_model(distance)
@@ -102,7 +102,7 @@ class Predictor(object):
                                                                                                     hic_pseudocount_distance=self.hic_pseudocount_distance)
 
         #Activity
-        enhancers['activity_base'] = np.sqrt(enhancers['normalized_dhs'] * enhancers['normalized_h3k27ac'])
+        #enhancers['activity_base'] = np.sqrt(enhancers['normalized_dhs'] * enhancers['normalized_h3k27ac'])
         #enhancers['activity_base_noqnorm'] = np.sqrt(enhancers[self.DHS_column] * enhancers['H3K27ac.RPM'])
 
         #Power Law
@@ -141,12 +141,12 @@ class Predictor(object):
             })
         return stats
 
-    def add_normalized_data_to_enhancers(self, enhancers):
-        is_promoter = enhancers['isPromoterElement'] == True
-        enhancers.ranges.loc[is_promoter, 'normalized_dhs'] = self.DHS_normalizer_promoter(enhancers.ranges.loc[is_promoter][self.DHS_column])
-        enhancers.ranges.loc[~is_promoter, 'normalized_dhs'] = self.DHS_normalizer_nonpromoter(enhancers.ranges.loc[~is_promoter][self.DHS_column])
-        enhancers.ranges.loc[is_promoter, 'normalized_h3k27ac'] = self.H3K27ac_normalizer_promoter(enhancers.ranges.loc[is_promoter][self.H3K27ac_column])
-        enhancers.ranges.loc[~is_promoter, 'normalized_h3k27ac'] = self.H3K27ac_normalizer_nonpromoter(enhancers.ranges.loc[~is_promoter][self.H3K27ac_column])
+    # def add_normalized_data_to_enhancers(self, enhancers):
+    #     is_promoter = enhancers['isPromoterElement'] == True
+    #     enhancers.ranges.loc[is_promoter, 'normalized_dhs'] = self.DHS_normalizer_promoter(enhancers.ranges.loc[is_promoter][self.DHS_column])
+    #     enhancers.ranges.loc[~is_promoter, 'normalized_dhs'] = self.DHS_normalizer_nonpromoter(enhancers.ranges.loc[~is_promoter][self.DHS_column])
+    #     enhancers.ranges.loc[is_promoter, 'normalized_h3k27ac'] = self.H3K27ac_normalizer_promoter(enhancers.ranges.loc[is_promoter][self.H3K27ac_column])
+    #     enhancers.ranges.loc[~is_promoter, 'normalized_h3k27ac'] = self.H3K27ac_normalizer_nonpromoter(enhancers.ranges.loc[~is_promoter][self.H3K27ac_column])
 
 
 def compute_score(enhancers, product_terms, prefix):
@@ -160,26 +160,26 @@ def compute_score(enhancers, product_terms, prefix):
 
     return(enhancers)
 
-def make_normalizer(values, target_vals, maxpercentile):
-    #assert len(values) >= count, "Need at least {} source values to build normalizer".format(count)
-    #values = np.sort(values)[-count:]
-    src_vals = np.percentile(values, np.linspace(0, maxpercentile, len(target_vals)))
+# def make_normalizer(values, target_vals, maxpercentile):
+#     #assert len(values) >= count, "Need at least {} source values to build normalizer".format(count)
+#     #values = np.sort(values)[-count:]
+#     src_vals = np.percentile(values, np.linspace(0, maxpercentile, len(target_vals)))
 
-    # extend linear prediction to source = 0
-    # Seto slope_0 to 0 if we have a 0/0 situation
-    slope_0 = np.nan_to_num((target_vals[1] - target_vals[0]) / (src_vals[1] - src_vals[0]))
-    target_0 = target_vals[0] - slope_0 * src_vals[0]
+#     # extend linear prediction to source = 0
+#     # Seto slope_0 to 0 if we have a 0/0 situation
+#     slope_0 = np.nan_to_num((target_vals[1] - target_vals[0]) / (src_vals[1] - src_vals[0]))
+#     target_0 = target_vals[0] - slope_0 * src_vals[0]
 
-    # extend linear prediction to source = max(values)
-    slope_max = (target_vals[-1] - target_vals[-2]) / (src_vals[-1] - src_vals[-2])
-    target_max = target_vals[-1] + slope_max * (max(values) - src_vals[-1])
+#     # extend linear prediction to source = max(values)
+#     slope_max = (target_vals[-1] - target_vals[-2]) / (src_vals[-1] - src_vals[-2])
+#     target_max = target_vals[-1] + slope_max * (max(values) - src_vals[-1])
 
-    src_vals = np.concatenate(([0], src_vals, [max(values)]))
-    target_vals = np.concatenate(([target_0], target_vals, [target_max]))
+#     src_vals = np.concatenate(([0], src_vals, [max(values)]))
+#     target_vals = np.concatenate(([target_0], target_vals, [target_max]))
 
-    def normalizer(vals):
-        normed = np.interp(vals, src_vals, target_vals)
-        normed[normed < 0] = 0
-        return normed
+#     def normalizer(vals):
+#         normed = np.interp(vals, src_vals, target_vals)
+#         normed[normed < 0] = 0
+#         return normed
 
-    return normalizer
+#     return normalizer

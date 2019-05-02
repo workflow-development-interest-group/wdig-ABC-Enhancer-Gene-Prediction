@@ -47,21 +47,22 @@ def parseargs(required_args=True):
 def processCellType(args):
     params = parse_params_file(args)
 
-    params["outdir"] = args.outdir
-    os.makedirs(params["outdir"], exist_ok=True)
+    os.makedirs(args.outdir, exist_ok=True)
 
     #Setup Genes
     genes = load_genes(file = args.genes, 
                         ue_file = args.ubiquitously_expressed_genes,
                         chrom_sizes = args.chrom_sizes,
-                        outdir = params["outdir"], 
+                        outdir = args.outdir, 
                         expression_table_list = params["expression_table"], 
                         gene_id_names = args.gene_name_annotations, 
                         primary_id = args.primary_gene_identifier)
     genes = annotate_genes_with_features(genes = genes, 
                                             genome_sizes = args.chrom_sizes, 
                                             use_fast_count = (not args.use_secondary_counting_method),
-                                            **params)
+                                            default_accessibility_feature = params['default_accessibility_feature'],
+                                            features = params['features'],
+                                            outdir = args.outdir)
     genes.to_csv(os.path.join(params["outdir"], "GeneList.txt"),
                  sep='\t', index=False, header=True, float_format="%.6f")
 
@@ -73,7 +74,9 @@ def processCellType(args):
                                 #cellType=cellType, 
                                 tss_slop_for_class_assignment=args.tss_slop_for_class_assignment,
                                 use_fast_count = (not args.use_secondary_counting_method),
-                                **params)
+                                default_accessibility_feature = params['default_accessibility_feature'],
+                                features = params['features'],
+                                outdir = args.outdir)
     enhancers.to_csv(os.path.join(params['outdir'], "EnhancerList.txt"),
                 sep='\t', index=False, header=True, float_format="%.6f")
     enhancers[['chr', 'start', 'end', 'name']].to_csv(os.path.join(params['outdir'], "EnhancerList.bed"),
