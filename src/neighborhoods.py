@@ -19,7 +19,8 @@ def load_genes(file,
                outdir,
                expression_table_list,
                gene_id_names,
-               primary_id):
+               primary_id,
+               cellType):
 
     bed = read_bed(file) 
     genes = process_gene_bed(bed, gene_id_names, primary_id, chrom_sizes)
@@ -54,6 +55,9 @@ def load_genes(file,
     #Ubiquitously expressed annotation
     ubiq = pd.read_csv(ue_file, sep="\t")
     genes['is_ue'] = genes['name'].isin(ubiq.iloc[:,0].values.tolist())
+
+    #cell type
+    genes['cellType'] = cellType
 
     return genes
 
@@ -96,6 +100,10 @@ def annotate_genes_with_features(genes,
 
     access_col = default_accessibility_feature + ".RPKM.quantile.TSS1Kb"  
     merged['PromoterActivityQuantile'] = ((0.0001+merged['H3K27ac.RPKM.quantile.TSS1Kb'])*(0.0001+merged[access_col])).rank(method='average', na_option="top", ascending=True, pct=True)
+
+    merged.to_csv(os.path.join(outdir, "GeneList.txt"),
+             sep='\t', index=False, header=True, float_format="%.6f")
+
     return merged
 
 def process_gene_bed(bed, name_cols, main_name, chrom_sizes):
@@ -147,7 +155,7 @@ def load_enhancers(outdir=".",
                    force=False,
                    candidate_peaks="",
                    skip_rpkm_quantile=False,
-                   #cellType="",
+                   cellType="",
                    tss_slop_for_class_assignment = 500,
                    use_fast_count=True,
                    default_accessibility_feature = ""):
@@ -160,6 +168,9 @@ def load_enhancers(outdir=".",
     #enhancers = run_qnorm(enhancers, qnorm)
     enhancers = compute_activity(enhancers, default_accessibility_feature)
 
+    #cellType
+    enhancers['cellType'] = cellType
+
     # Assign categories
     if genes is not None:
         print("Assigning classes to enhancers")
@@ -171,7 +182,11 @@ def load_enhancers(outdir=".",
         print("          Genic: {}".format(sum(enhancers['isGenicElement'])))
         print("         Intergenic: {}".format(sum(enhancers['isIntergenicElement'])))
 
-    return enhancers
+
+    enhancers.to_csv(os.path.join(outdir, "EnhancerList.txt"),
+                sep='\t', index=False, header=True, float_format="%.6f")
+    enhancers[['chr', 'start', 'end', 'name']].to_csv(os.path.join(outdir, "EnhancerList.bed"),
+                sep='\t', index=False, header=False)
 
 def assign_enhancer_classes(enhancers, genes, tss_slop=500):
     # build interval trees
