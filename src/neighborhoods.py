@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from scipy import interpolate
 import os
 import os.path
 from subprocess import check_call, check_output, PIPE, Popen, getoutput, CalledProcessError
@@ -53,8 +54,9 @@ def load_genes(file,
         genes['Expression'] = np.NaN
     
     #Ubiquitously expressed annotation
-    ubiq = pd.read_csv(ue_file, sep="\t")
-    genes['is_ue'] = genes['name'].isin(ubiq.iloc[:,0].values.tolist())
+    if ue_file is not None:
+        ubiq = pd.read_csv(ue_file, sep="\t")
+        genes['is_ue'] = genes['name'].isin(ubiq.iloc[:,0].values.tolist())
 
     #cell type
     genes['cellType'] = cellType
@@ -155,21 +157,23 @@ def load_enhancers(outdir=".",
                    force=False,
                    candidate_peaks="",
                    skip_rpkm_quantile=False,
-                   cellType="",
+                   cellType=None,
                    tss_slop_for_class_assignment = 500,
                    use_fast_count=True,
-                   default_accessibility_feature = ""):
+                   default_accessibility_feature = "",
+                   qnorm = None):
 
     enhancers = read_bed(candidate_peaks)
     enhancers = enhancers.ix[~ (enhancers.chr.str.contains(re.compile('random|chrM|_|hap|Un')))]
 
     enhancers = count_features_for_bed(enhancers, candidate_peaks, genome_sizes, features, outdir, "Enhancers", skip_rpkm_quantile, force, use_fast_count)
 
-    #enhancers = run_qnorm(enhancers, qnorm)
+    enhancers = run_qnorm(enhancers, qnorm)
     enhancers = compute_activity(enhancers, default_accessibility_feature)
 
     #cellType
-    enhancers['cellType'] = cellType
+    if cellType is not None:
+        enhancers['cellType'] = cellType
 
     # Assign categories
     if genes is not None:
@@ -264,6 +268,7 @@ def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True):
             print("Trying bamtobed method ...\n")
             completed = False
 
+    #Alternate counting method. Slower and requires more memory.
     # convert BAM to BED, filter to standard chromosomes, sort, then use the very fast bedtools coverage -sorted algorithm
     # Note: This requires that bed_file is also sorted and in same chromosome order as genome_sizes (first do bedtools sort -i bed_file -faidx genome_sizes)
     #         BEDTools will error out if files are not properly sorted
@@ -489,11 +494,29 @@ def determine_accessibility_feature(args):
 
 def compute_activity(df, access_col):
     if access_col == "DHS":
-        df['activity_base'] = np.sqrt(df['H3K27ac.RPM'] * df['DHS.RPM'])
+        df['activity_base'] = np.sqrt(df['normalized_h3K27ac'] * df['normalized_dhs'])
     elif access_col == "ATAC":
-        df['activity_base'] = np.sqrt(df['H3K27ac.RPM'] * df['ATAC.RPM'])
+        df['activity_base'] = np.sqrt(df['normalized_h3K27ac'] * df['normalized_atac'])
     else:
         raise RuntimeError("At least one of ATAC or DHS must be provided!")
 
-    return(df)
+    return df
+
+def run_qnorm(df, qnorm):
+    if qnorm is None:
+        df['normalized_h3K27ac'] = df['H3K27ac.RPM']
+        if 'DHS.RPM' in df.columns: df['normalized_dhs'] = df['DHS.RPM']
+        if 'ATAC.RPM' in df.columns: df['normalized_atac'] = df['ATAC.RPM']
+    else:
+        qnorm = pd.read_csv(qnorm, sep = "\t")
+        if df.shape[0] > qnorm['rank'].max:
+            raise RuntimeError("There are more candidate enhancers than was used to generate qnorm file. Cannot qnorm!")
+
+        col_dict = {'DHS.RPM' : 'normalized_dhs', 'ATAC.RPM' : 'normalized_atac', 'H3K27ac.RPM' : 'normalized_h3K27ac'}
+        for col in set(df.columns & col_dict.keys()):
+            #df[col_dict[col]] = np.interp(df[col].rank, qnorm['rank'], qnorm[col])
+            interpfunc = interpolate.interp1d(qnorm['rank'], qnorm[col], kind='linear', fill_value='extrapolate')
+            df[col_dict[col]] = interpfunc(df[col].rank)
+
+    return df
 

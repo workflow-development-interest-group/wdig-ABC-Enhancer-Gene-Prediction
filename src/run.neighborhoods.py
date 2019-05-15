@@ -30,12 +30,13 @@ def parseargs(required_args=True):
     parser.add_argument('--ATAC', default=None, help="Comma delimited string of ATAC .bam files. Either ATAC or DHS must be provided")
     parser.add_argument('--default_accessibility_feature', default=None, help="If both ATAC and DHS are provided, this flag must be set to either 'DHS' or 'ATAC' signifying which datatype to use in computing activity")
     parser.add_argument('--expression_table', default=None, help="Comma delimited string of gene expression files")
+    parser.add_argument('--qnorm', default=None, help="Quantile normalization reference file")
 
     #Other
     parser.add_argument('--tss_slop_for_class_assignment', default=500, type=int, help="Consider an element a promoter if it is within this many bp of a tss")
     parser.add_argument('--skip_rpkm_quantile', action="store_true", help="Do not compute RPKM and quantiles in EnhancerList.txt")
     parser.add_argument('--use_secondary_counting_method', action="store_true", help="Use a slightly slower way to count bam over bed. Also requires more memory. But is more portable across systems")
-    parser.add_argument('--cellType', help="Name of cell type")
+    parser.add_argument('--cellType', default=None, help="Name of cell type")
 
     # replace textio wrapper returned by argparse with actual filename
     args = parser.parse_args()
@@ -71,7 +72,7 @@ def processCellType(args):
                     genome_sizes=args.chrom_sizes, 
                     candidate_peaks=args.candidate_enhancer_regions, 
                     skip_rpkm_quantile=args.skip_rpkm_quantile, 
-                    #cellType=cellType, 
+                    qnorm = args.qnorm,
                     tss_slop_for_class_assignment=args.tss_slop_for_class_assignment,
                     use_fast_count = (not args.use_secondary_counting_method),
                     default_accessibility_feature = params['default_accessibility_feature'],
