@@ -47,7 +47,7 @@ def make_candidate_regions_from_summits(macs_peaks, accessibility_file, genome_s
     raw_counts_outfile = os.path.join(outdir, os.path.basename(macs_peaks) + os.path.basename(accessibility_file) + ".Counts.bed")
 
     if regions_whitelist:
-    	whitelist_command = "| (bedtools intersect -a {regions_whitelist} -b {genome_sizes}.bed -wa | bedtools slop -i stdin -b {peak_extend} -g {genome_sizes} | cut -f 1-3 && cat) |"
+    	whitelist_command = "(bedtools intersect -a {regions_whitelist} -b {genome_sizes}.bed -wa | cut -f 1-3 && cat) |"
     else:
     	whitelist_command = ""
 
@@ -59,6 +59,9 @@ def make_candidate_regions_from_summits(macs_peaks, accessibility_file, genome_s
     #1. Count DHS/ATAC reads in candidate regions
     run_count_reads(accessibility_file, raw_counts_outfile, macs_peaks, genome_sizes, use_fast_count=True)
 
+    # import pdb
+    # pdb.set_trace()
+
     #2. Take top N regions, get summits, extend summits, merge, remove blacklist, add whitelist, sort and merge
     #use -sorted in intersect command? Not worth it, both files are small
     command = "bedtools sort -i {raw_counts_outfile} -faidx {genome_sizes} | bedtools merge -i stdin -c 4 -o max | sort -nr -k 4 | head -n {n_enhancers} |" + \
@@ -68,10 +71,11 @@ def make_candidate_regions_from_summits(macs_peaks, accessibility_file, genome_s
         "bedtools sort -i stdin -faidx {genome_sizes} |" + \
         "bedtools merge -i stdin | " + \
         blacklist_command + \
-        "cut -f 1-3 " + whitelist_command + \
+        "cut -f 1-3 | " + whitelist_command + \
         "bedtools sort -i stdin -faidx {genome_sizes} | bedtools merge -i stdin > {outfile}"
 
-    # command = command.format(**locals())
+    command = command.format(**locals())
+    
     # print("Running: " + command)
     # out = getoutput(command)
     # print(out)

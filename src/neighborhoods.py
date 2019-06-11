@@ -108,7 +108,7 @@ def annotate_genes_with_features(genes,
 
     return merged
 
-def process_gene_bed(bed, name_cols, main_name, chrom_sizes):
+def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None):
 
     try:
         bed = bed.drop(['thickStart','thickEnd','itemRgb','blockCount','blockSizes','blockStarts'], axis=1)
@@ -118,8 +118,8 @@ def process_gene_bed(bed, name_cols, main_name, chrom_sizes):
     assert(main_name in name_cols)
 
     names = bed.name.str.split(";", expand=True)
-    names.columns = name_cols.split(",")
     assert(len(names.columns) == len(name_cols.split(",")))
+    names.columns = name_cols.split(",")
     bed = pandas.concat([bed, names], axis=1)
 
     bed['name'] = bed[main_name]
@@ -130,8 +130,9 @@ def process_gene_bed(bed, name_cols, main_name, chrom_sizes):
     bed.drop_duplicates(inplace=True)
 
     #Remove genes that are not defined in chromosomes file
-    sizes = read_bed(chrom_sizes)
-    bed = bed[bed['chr'].isin(set(sizes['chr'].values))]
+    if chrom_sizes is not None:
+        sizes = read_bed(chrom_sizes)
+        bed = bed[bed['chr'].isin(set(sizes['chr'].values))]
 
     #Enforce that gene names should be unique
     assert(len(set(bed['name'])) == len(bed['name'])), "Gene IDs are not unique! Failing. Please ensure unique identifiers are passed to --genes"
@@ -182,8 +183,8 @@ def load_enhancers(outdir=".",
 
         # Output stats
         print("Total enhancers: {}".format(len(enhancers)))
-        print("            Promoters: {}".format(sum(enhancers['isPromoterElement'])))
-        print("          Genic: {}".format(sum(enhancers['isGenicElement'])))
+        print("         Promoters: {}".format(sum(enhancers['isPromoterElement'])))
+        print("         Genic: {}".format(sum(enhancers['isGenicElement'])))
         print("         Intergenic: {}".format(sum(enhancers['isIntergenicElement'])))
 
 
@@ -502,21 +503,28 @@ def compute_activity(df, access_col):
 
     return df
 
-def run_qnorm(df, qnorm):
+def run_qnorm(df, qnorm, qnorm_method = "quantile"):
     if qnorm is None:
         df['normalized_h3K27ac'] = df['H3K27ac.RPM']
         if 'DHS.RPM' in df.columns: df['normalized_dhs'] = df['DHS.RPM']
         if 'ATAC.RPM' in df.columns: df['normalized_atac'] = df['ATAC.RPM']
     else:
         qnorm = pd.read_csv(qnorm, sep = "\t")
-        if df.shape[0] > qnorm['rank'].max:
-            raise RuntimeError("There are more candidate enhancers than was used to generate qnorm file. Cannot qnorm!")
+        nRegions = df.shape[0] 
 
         col_dict = {'DHS.RPM' : 'normalized_dhs', 'ATAC.RPM' : 'normalized_atac', 'H3K27ac.RPM' : 'normalized_h3K27ac'}
         for col in set(df.columns & col_dict.keys()):
-            #df[col_dict[col]] = np.interp(df[col].rank, qnorm['rank'], qnorm[col])
-            interpfunc = interpolate.interp1d(qnorm['rank'], qnorm[col], kind='linear', fill_value='extrapolate')
-            df[col_dict[col]] = interpfunc(df[col].rank)
+            #if there is no ATAC.RPM in the qnorm file, but there is ATAC.RPM in enhancers, then qnorm ATAC to DHS
+            if col == 'ATAC.RPM' and 'ATAC.RPM' not in qnorm.columns:
+                qnorm['ATAC.RPM'] = qnorm['DHS.RPM']
+
+            if qnorm_method == "rank":
+                #print("There are more candidate regions than was used to generate qnorm file. Using ranks for qnorm")
+                interpfunc = interpolate.interp1d(qnorm['rank'], qnorm[col], kind='linear', fill_value='extrapolate')
+                df[col_dict[col]] = interpfunc((1 - df[col + ".quantile"]) * nRegions).clip(0)
+            elif qnorm_method == "quantile":
+                #print("There are less candidate regions than was used to generate qnorm file. Using quantiles for qnorm")
+                interpfunc = interpolate.interp1d(qnorm['quantile'], qnorm[col], kind='linear', fill_value='extrapolate')
+                df[col_dict[col]] = interpfunc(df[col + ".quantile"]).clip(0)
 
     return df
-

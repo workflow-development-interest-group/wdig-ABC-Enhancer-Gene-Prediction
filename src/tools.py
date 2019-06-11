@@ -142,7 +142,7 @@ def check_gene_for_runnability(gene, expression_cutoff, activity_quantile_cutoff
         gene['expressed'] = np.NaN
 
     is_active = gene["PromoterActivityQuantile"] >= activity_quantile_cutoff
-    missing_expression = np.isnan(gene.expressed) or (gene.expressed is None) or (gene.expressed is "")
+    missing_expression = np.isnan(gene.Expression) or (gene.Expression is None) or (gene.Expression is "")
     should_run = (gene.expressed is True) or (missing_expression and is_active)
 
     return(should_run)

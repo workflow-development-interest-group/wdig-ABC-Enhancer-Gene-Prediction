@@ -15,16 +15,12 @@ def get_model_argument_parser():
     readable = argparse.FileType('r')
 
     #Basic parameters
-    parser.add_argument('--cellType', required=True, help="Name of cell type")
-    parser.add_argument('--nbhd_directory', help="Directory with neighborhoods files")
+    parser.add_argument('--enhancers', required=True, help="Candidate enhancer regions. Formatted as the EnhancerList.txt file produced by run.neighborhoods.py")
+    parser.add_argument('--genes', required=True, help="Genes to make predictions for. Formatted as the GeneList.txt file produced by run.neighborhoods.py")
     parser.add_argument('--outdir', required=True, help="output directory")
-    #parser.add_argument('--params_file', help="Cell type parameters file")
-    parser.add_argument('--genes', type=readable, required=False, help="Table of genes for which predictions should be made. Overrides GeneList.txt in neighborhoods directory")
     parser.add_argument('--window', type=int, default=5000000, help="Make predictions for all candidate elements within this distance of the gene's TSS")
     parser.add_argument('--threshold', type=float, required=True, default=None, help="Threshold on ABC Score to call a predicted positive")
-
-    #qnorm
-    #parser.add_argument('--qnorm', default='', help="json file used for quantile normalizing epigenetic data")
+    parser.add_argument('--cellType', help="Name of cell type")
 
     #hic
     parser.add_argument('--HiCdir', help="Directory with hic bedgraphs")
@@ -58,22 +54,9 @@ def get_predict_argument_parser():
     parser = get_model_argument_parser()
     return parser
 
-
-def parse_cell_type_args(args, cellType):
-    # file_params = pd.read_table(args.params_file, sep='\t')
-    # file_params = file_params.loc[file_params["cell_type"] == cellType, ]
-    # args.DHS_column = file_params['default_accessibility_feature'].values[0] + ".RPM"
-
-    args.enhancers = os.path.join(args.nbhd_directory, "EnhancerList.txt")   
-    if args.genes is None:
-        args.genes = os.path.join(args.nbhd_directory, "GeneList.txt")
-     
-    return args
-
 def main():
     parser = get_predict_argument_parser()
     args = parser.parse_args()
-    args = parse_cell_type_args(args, args.cellType)
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
@@ -93,16 +76,12 @@ def main():
     print("building predictor")
     predictor = Predictor(enhancers, **vars(args))
 
-    #print("applying qnorm")
-    #predictor.add_normalized_data_to_enhancers(enhancers)
-
     chromosomes = predictor.chromosomes()
     print("data loaded for chromosomes: {}".format(" ".join(sorted(chromosomes))))
 
     #Initialize Prediction files
     pred_file = os.path.join(args.outdir, "EnhancerPredictions.txt")
     all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.txt.gz")
-    pred_bed = os.path.join(args.outdir, "EnhancerPredictions.bed")
 
     args.score_column = "ABC.Score"
 
@@ -110,20 +89,22 @@ def main():
     all_putative_list = []
     gene_stats = []
     failed_genes = []
-    pbar = pb.ProgressBar(max_value=len(genes), redirect_stdout=True)
-    for idx, gene in pbar(genes.iterrows()):
+
+    for idx, gene in genes.iterrows():
         if gene.chr == 'chrY' and not args.include_chrY:
             continue
         if gene.chr not in chromosomes:
             print("\nNo data for {}".format(gene.chr))
             continue
-        print("\nPredicting {} with {} {} TSS".format(gene["name"], gene["chr"], gene["tss"]))
+        print("\nPredicting {} with TSS {} {}".format(gene["name"], gene["chr"], gene["tss"]))
 
         try:
             nearby_enhancers = enhancers.within_range(gene.chr, gene.tss - args.window, gene.tss + args.window)
             predictor.predict_from_normalized_to_enhancers(nearby_enhancers, gene, args.window, tss_slop=args.tss_slop)
             
-            col_names=['chr','start','end','TargetGene','TargetGeneTSS','class','Score.Fraction','Score','distance','hic.distance','hic.distance.adj','estimatedCP','estimatedCP.adj','normalized_dhs','normalized_h3k27ac','TargetGeneExpression','TargetGeneTSSActivityQuantile']
+            col_names = ['chr','start','end','TargetGene','TargetGeneTSS','class','ABC.Score','powerlaw.Score','distance','hic.distance','hic.distance.adj','estimatedCP','estimatedCP.adj','normalized_dhs','normalized_atac','activity_base','normalized_h3k27ac','TargetGeneExpression','TargetGeneTSSActivityQuantile']
+            col_names = list(set(nearby_enhancers.columns) & set(col_names))
+
             if not args.skip_gene_files:
                 if not args.skinny_gene_files:
                     write_scores(preddir, gene, nearby_enhancers)
@@ -131,7 +112,10 @@ def main():
                     write_scores(preddir, gene, nearby_enhancers[col_names])
 
             if args.make_all_putative:
-                all_putative_list.append(nearby_enhancers[col_names])
+                if args.skinny_gene_files:
+                    all_putative_list.append(nearby_enhancers[col_names])
+                else:
+                    all_putative_list.append(nearby_enhancers)
             
             gene_is_expressed_proxy = check_gene_for_runnability(gene, args.expression_cutoff, args.promoter_activity_quantile_cutoff)
             if args.run_all_genes or gene_is_expressed_proxy:

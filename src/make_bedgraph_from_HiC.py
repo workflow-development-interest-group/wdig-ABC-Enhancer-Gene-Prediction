@@ -14,7 +14,7 @@ def parseargs():
     
     #Genes    
     parser.add_argument('--genes', required=True, help=".bed file of genes")
-    parser.add_argument('--gene_name_annotations', default="symbol,refseq", help="Comma delimited string of names corresponding to the gene identifiers present in the name field of the gene annotation bed file")
+    parser.add_argument('--gene_name_annotations', default="symbol", help="Comma delimited string of names corresponding to the gene identifiers present in the name field of the gene annotation bed file")
     parser.add_argument('--primary_gene_identifier', default="symbol", help="Primary identifier used to identify genes. Must be present in gene_name_annotations")
 
     #HiC Params

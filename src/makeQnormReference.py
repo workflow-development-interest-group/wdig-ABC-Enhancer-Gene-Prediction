@@ -13,22 +13,23 @@ def parseargs(required_args=True):
 
     parser.add_argument('--enhancers', required=required_args, help="EnhancerList file")
     parser.add_argument('--outfile', default="", help="columns for which to compute qnorm reference")
-    parser.add_argument('--cols', default="DHS.RPM,H3K27ac.RPM,ATAC.RPM", help="columns for which to compute qnorm reference")
+    parser.add_argument('--cols', default="DHS.RPM,H3K27ac.RPM", help="columns for which to compute qnorm reference")
 
     args = parser.parse_args()
     return args
 
 
 def makeQnorm(args):
-	enhancers = pd.read_csv(args.enhancers, sep="\t")
-	ref = pd.DataFrame({'quantile' : np.concatenate([np.linspace(0,.99,100), np.linspace(.991,.999,9)])})
-	ref['rank'] = (ref['quantile'] * enhancers.shape[0]).round(decimals=0)
+    enhancers = pd.read_csv(args.enhancers, sep="\t")
+    ref = pd.DataFrame({'quantile' : np.concatenate([np.linspace(0,.99,100), np.linspace(.991,.999,9), np.linspace(.9991,.9999,9)])})
+    #ref['rank'] = (ref['quantile'] * enhancers.shape[0]).round(decimals=0)
+    ref['rank'] = ((1 - ref['quantile']) * enhancers.shape[0]).round(decimals=0)
 
-	cols = set(set(vars(args)['cols'].split(",")) & set(enhancers.columns))
-	for col in cols:
-		ref[col] = np.percentile(enhancers[col], ref['quantile']*100)
+    cols = set(set(vars(args)['cols'].split(",")) & set(enhancers.columns))
+    for col in cols:
+        ref[col] = np.percentile(enhancers[col].values, ref['quantile'].values*100)
 
-	ref.to_csv(args.outfile, sep="\t", index=False, float_format="%.3f")
+    ref.to_csv(args.outfile, sep="\t", index=False, float_format="%.5f")
 
 def main(args):
     makeQnorm(args)

@@ -1,3 +1,0 @@
-name	sizes	ue_genes
-hg19	example/config/chr22	example/config/UbiquitouslyExpressedGenesHG19.txt
-

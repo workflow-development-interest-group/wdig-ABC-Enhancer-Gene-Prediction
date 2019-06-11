@@ -19,7 +19,7 @@ def parseargs(required_args=True):
     
     #parser.add_argument('--genome', required=required_args, help="File listing genome annotations for each species/build")
     parser.add_argument('--genes', required=required_args, help="bed file with gene annotations. Must be in bed-6 format")
-    parser.add_argument('--gene_name_annotations', default="symbol,refseq", help="Comma delimited string of names corresponding to the gene identifiers present in the name field of the gene annotation bed file")
+    parser.add_argument('--gene_name_annotations', default="symbol", help="Comma delimited string of names corresponding to the gene identifiers present in the name field of the gene annotation bed file")
     parser.add_argument('--primary_gene_identifier', default="symbol", help="Primary identifier used to identify genes. Must be present in gene_name_annotations. The primary identifier must be unique")
     parser.add_argument('--ubiquitously_expressed_genes', default=None, help="File listing ubiquitously expressed genes. These will be flagged by the model, but this annotation does not affect model predictions")
 
