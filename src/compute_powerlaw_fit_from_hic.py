@@ -114,6 +114,8 @@ def compute_powerlaw_fit(m, args, make_plot=True):
 if __name__ == '__main__':
     args = parseargs()
 
+    os.makedirs(args.outDir, exist_ok=True)
+
     #Average together bedgraphs
     m, var = welford(filegen(args))
 

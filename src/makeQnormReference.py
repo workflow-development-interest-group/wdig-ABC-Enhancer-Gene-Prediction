@@ -21,14 +21,39 @@ def parseargs(required_args=True):
 
 def makeQnorm(args):
     enhancers = pd.read_csv(args.enhancers, sep="\t")
-    ref = pd.DataFrame({'quantile' : np.concatenate([np.linspace(0,.99,100), np.linspace(.991,.999,9), np.linspace(.9991,.9999,9)])})
-    #ref['rank'] = (ref['quantile'] * enhancers.shape[0]).round(decimals=0)
-    ref['rank'] = ((1 - ref['quantile']) * enhancers.shape[0]).round(decimals=0)
 
-    cols = set(set(vars(args)['cols'].split(",")) & set(enhancers.columns))
-    for col in cols:
-        ref[col] = np.percentile(enhancers[col].values, ref['quantile'].values*100)
+    ref = []
 
+    # import pdb
+    # pdb.set_trace()
+
+    for enh_type in ['any','promoter','nonpromoter']:
+        if enh_type == 'any':
+            this_enhancers = enhancers
+        elif enh_type == 'promoter':
+            this_enhancers = enhancers.loc[np.logical_or(enhancers['class'] == "tss", enhancers['class'] == "promoter")]
+        elif enh_type == 'nonpromoter':
+            this_enhancers = enhancers.loc[np.logical_and(enhancers['class'] != "tss" , enhancers['class'] != "promoter")]
+        else:
+            error("Wrong type")
+
+        this_ref = pd.DataFrame({'enh_class' : enh_type, 'quantile' : np.concatenate([np.linspace(.01,.99,99), np.linspace(.991,.999,9), np.linspace(.9991,.9999,9)])})
+        this_ref['rank'] = ((1 - this_ref['quantile']) * this_enhancers.shape[0]).round(decimals=0)
+
+        cols = set(set(vars(args)['cols'].split(",")) & set(this_enhancers.columns))
+        for col in cols:
+            this_ref[col] = np.percentile(this_enhancers[col].values, this_ref['quantile'].values*100)
+
+        ref.append(this_ref)
+
+    # ref = pd.DataFrame({'quantile' : np.concatenate([np.linspace(0,.99,100), np.linspace(.991,.999,9), np.linspace(.9991,.9999,9)])})
+    # ref['rank'] = ((1 - ref['quantile']) * enhancers.shape[0]).round(decimals=0)
+
+    # cols = set(set(vars(args)['cols'].split(",")) & set(enhancers.columns))
+    # for col in cols:
+    #     ref[col] = np.percentile(enhancers[col].values, ref['quantile'].values*100)
+
+    ref = pd.concat(ref)
     ref.to_csv(args.outfile, sep="\t", index=False, float_format="%.5f")
 
 def main(args):

@@ -169,9 +169,6 @@ def load_enhancers(outdir=".",
 
     enhancers = count_features_for_bed(enhancers, candidate_peaks, genome_sizes, features, outdir, "Enhancers", skip_rpkm_quantile, force, use_fast_count)
 
-    enhancers = run_qnorm(enhancers, qnorm)
-    enhancers = compute_activity(enhancers, default_accessibility_feature)
-
     #cellType
     if cellType is not None:
         enhancers['cellType'] = cellType
@@ -187,6 +184,8 @@ def load_enhancers(outdir=".",
         print("         Genic: {}".format(sum(enhancers['isGenicElement'])))
         print("         Intergenic: {}".format(sum(enhancers['isIntergenicElement'])))
 
+    enhancers = run_qnorm(enhancers, qnorm)
+    enhancers = compute_activity(enhancers, default_accessibility_feature)
 
     enhancers.to_csv(os.path.join(outdir, "EnhancerList.txt"),
                 sep='\t', index=False, header=True, float_format="%.6f")
