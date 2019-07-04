@@ -57,7 +57,7 @@ class HiCFetcher(object):
             df = pandas.read_table(best_interval.data, compression='gzip', header=None)
             df.columns = ['chr', 'start', 'end', 'val']
         except:
-            print("Count not load: " + best_interval.data)
+            print("Could not load: " + best_interval.data)
             return np.full([len(cols), ], np.nan), np.nan, False, np.nan, np.nan
         
         #Adjust entry on the diagonal of the Hi-C matrix.

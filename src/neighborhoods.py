@@ -21,7 +21,8 @@ def load_genes(file,
                expression_table_list,
                gene_id_names,
                primary_id,
-               cellType):
+               cellType,
+               class_gene_file):
 
     bed = read_bed(file) 
     genes = process_gene_bed(bed, gene_id_names, primary_id, chrom_sizes)
@@ -61,7 +62,14 @@ def load_genes(file,
     #cell type
     genes['cellType'] = cellType
 
-    return genes
+    #genes for class assignment
+    if class_gene_file is None:
+        genes_for_class_assignment = genes
+    else:
+        genes_for_class_assignment = read_bed(class_gene_file)
+        genes_for_class_assignment = process_gene_bed(genes_for_class_assignment, gene_id_names, primary_id, chrom_sizes, fail_on_nonunique=False)
+
+    return genes, genes_for_class_assignment
 
 
 def annotate_genes_with_features(genes, 
@@ -108,7 +116,7 @@ def annotate_genes_with_features(genes,
 
     return merged
 
-def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None):
+def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None, fail_on_nonunique=True):
 
     try:
         bed = bed.drop(['thickStart','thickEnd','itemRgb','blockCount','blockSizes','blockStarts'], axis=1)
@@ -135,7 +143,8 @@ def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None):
         bed = bed[bed['chr'].isin(set(sizes['chr'].values))]
 
     #Enforce that gene names should be unique
-    assert(len(set(bed['name'])) == len(bed['name'])), "Gene IDs are not unique! Failing. Please ensure unique identifiers are passed to --genes"
+    if fail_on_nonunique:
+        assert(len(set(bed['name'])) == len(bed['name'])), "Gene IDs are not unique! Failing. Please ensure unique identifiers are passed to --genes"
 
     return bed
 
@@ -162,7 +171,8 @@ def load_enhancers(outdir=".",
                    tss_slop_for_class_assignment = 500,
                    use_fast_count=True,
                    default_accessibility_feature = "",
-                   qnorm = None):
+                   qnorm = None,
+                   class_override_file = None):
 
     enhancers = read_bed(candidate_peaks)
     enhancers = enhancers.ix[~ (enhancers.chr.str.contains(re.compile('random|chrM|_|hap|Un')))]
@@ -176,7 +186,7 @@ def load_enhancers(outdir=".",
     # Assign categories
     if genes is not None:
         print("Assigning classes to enhancers")
-        enhancers = assign_enhancer_classes(enhancers, genes, tss_slop = tss_slop_for_class_assignment)
+        enhancers = assign_enhancer_classes(enhancers, genes, tss_slop = tss_slop_for_class_assignment, class_override_file = class_override_file, cellType = cellType)
 
         # Output stats
         print("Total enhancers: {}".format(len(enhancers)))
@@ -192,7 +202,7 @@ def load_enhancers(outdir=".",
     enhancers[['chr', 'start', 'end', 'name']].to_csv(os.path.join(outdir, "EnhancerList.bed"),
                 sep='\t', index=False, header=False)
 
-def assign_enhancer_classes(enhancers, genes, tss_slop=500):
+def assign_enhancer_classes(enhancers, genes, tss_slop=500, class_override_file=None, cellType=None):
     # build interval trees
     tss_intervals = {}
     gene_intervals = {}
@@ -224,7 +234,38 @@ def assign_enhancer_classes(enhancers, genes, tss_slop=500):
     enhancers["enhancerSymbol"] = enhancers.apply(get_tss_symbol, axis=1)
     assert (enhancers.enhancerSymbol == "\n").sum() == 0
     enhancers["name"] = enhancers.apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
+
+    if class_override_file is not None:
+        enhancers = overrideEnhancerAnnotations(enhancers, cellType, class_override_file)
+
     return(enhancers)
+
+def overrideEnhancerAnnotations(enhancers, cell_line, override_file):
+    #Override enhancer class with manual annotations
+
+    override = pandas.read_csv(override_file, sep="\t")
+    override = override.loc[override['cellType'] == cell_line, :]
+
+    if override.shape[0] > 0:
+        enhancers = read_enhancers(enhancers)
+    else:
+        return(enhancers)
+
+    #for each entry in the override file find the overlaps with enhancers
+    #Then modify each enhancer entry appropriately
+    for idx, row in override.iterrows():
+        ovl_idx = enhancers.within_range(row['chr'],row['start'],row['end']).index
+
+        enhancers.ranges.loc[ovl_idx, 'class'] = row['class']
+
+        #Now need to update various columns derived from 'class'
+        enhancers.ranges.loc[ovl_idx, 'isPromoterElement'] = row['class'] == 'promoter'
+        enhancers.ranges.loc[ovl_idx, 'isGenicElement'] = row['class'] == 'genic'
+        enhancers.ranges.loc[ovl_idx, 'isIntergenicElement'] = row['class'] == 'intergenic'
+
+        enhancers.ranges.loc[ovl_idx, 'name'] = enhancers.ranges.loc[ovl_idx].apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
+
+    return enhancers.ranges
 
 def run_count_reads(target, output, bed_file, genome_sizes, use_fast_count):
     if target.endswith(".bam"):
@@ -237,7 +278,7 @@ def run_count_reads(target, output, bed_file, genome_sizes, use_fast_count):
         raise ValueError("File {} name was not in .bam, .tagAlign.gz, .bw".format(target))
 
 
-def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True):
+def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verbose=False):
     completed = True
         
     #Fast count:
@@ -251,12 +292,12 @@ def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True):
 
         #executable='/bin/bash' needed to parse < redirect in faidx_command
         p = Popen(faidx_command, stdout=PIPE, stderr=PIPE, shell=True, executable='/bin/bash')
-        print("Running: " + faidx_command)
+        if verbose: print("Running: " + faidx_command)
         (stdoutdata, stderrdata) = p.communicate()
         err = str(stderrdata, 'utf-8')
 
         p = Popen(command, stdout=PIPE, stderr=PIPE, shell=True)
-        print("Running: " + command)
+        if verbose: print("Running: " + command)
         (stdoutdata, stderrdata) = p.communicate()
         err = str(stderrdata, 'utf-8')
 
@@ -276,7 +317,7 @@ def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True):
     if not use_fast_count or ("terminated"  in err) or ("Error" in err) or ("ERROR" in err) or not completed:
         command = "bedtools bamtobed -i {bamfile} | cut -f 1-3 | bedtools intersect -wa -a stdin -b {genome_sizes}.bed | bedtools sort -i stdin -faidx {genome_sizes} | bedtools coverage -g {genome_sizes} -counts -sorted -a {bed_file} -b stdin | awk '{{print $1 \"\\t\" $2 \"\\t\" $3 \"\\t\" $NF}}' > {output}".format(**locals())
         p = Popen(command, stdout=PIPE, stderr=PIPE, shell=True)
-        print("Running: " + command)
+        if verbose: print("Running: " + command)
         (stdoutdata, stderrdata) = p.communicate()
 
         try:
@@ -459,23 +500,23 @@ def parse_params_file(args):
     params = {}
 
     params["default_accessibility_feature"] = determine_accessibility_feature(args)
-    params["features"] = make_features_from_param_df(args)
+    params["features"] = get_features(args)
 
-    if args.expression_table is not None:
+    if args.expression_table:
         params["expression_table"] = args.expression_table.split(",")
     else:
         params["expression_table"] = ''
 
     return(params)
 
-def make_features_from_param_df(args):
+def get_features(args):
     features = {}
     features['H3K27ac'] = args.H3K27ac.split(",")
     
-    if args.ATAC is not None:
+    if args.ATAC:
         features['ATAC'] = args.ATAC.split(",")
     
-    if args.DHS is not None:
+    if args.DHS:
         features['DHS'] = args.DHS.split(",")
 
     return features
@@ -483,11 +524,11 @@ def make_features_from_param_df(args):
 def determine_accessibility_feature(args):
     if args.default_accessibility_feature is not None:
         return args.default_accessibility_feature
-    elif (args.ATAC is not None) and (args.DHS is not None):
+    elif (not args.ATAC) and (not args.DHS):
         raise RuntimeError("Both DHS and ATAC have been provided. Must set one file to be the default accessibility feature!")
-    elif (args.ATAC is not None):
+    elif args.ATAC:
         return "ATAC"
-    elif (args.DHS is not None):
+    elif args.DHS:
         return "DHS"
     else:
         raise RuntimeError("At least one of ATAC or DHS must be provided!")
@@ -502,7 +543,11 @@ def compute_activity(df, access_col):
 
     return df
 
-def run_qnorm(df, qnorm, qnorm_method = "quantile"):
+def run_qnorm(df, qnorm, qnorm_method = "rank", separate_promoters = True):
+    # Quantile normalize epigenetic data to a reference
+    #
+    # Option to qnorm promoters and nonpromoters separately
+
     if qnorm is None:
         df['normalized_h3K27ac'] = df['H3K27ac.RPM']
         if 'DHS.RPM' in df.columns: df['normalized_dhs'] = df['DHS.RPM']
@@ -510,20 +555,37 @@ def run_qnorm(df, qnorm, qnorm_method = "quantile"):
     else:
         qnorm = pd.read_csv(qnorm, sep = "\t")
         nRegions = df.shape[0] 
-
         col_dict = {'DHS.RPM' : 'normalized_dhs', 'ATAC.RPM' : 'normalized_atac', 'H3K27ac.RPM' : 'normalized_h3K27ac'}
+
         for col in set(df.columns & col_dict.keys()):
             #if there is no ATAC.RPM in the qnorm file, but there is ATAC.RPM in enhancers, then qnorm ATAC to DHS
             if col == 'ATAC.RPM' and 'ATAC.RPM' not in qnorm.columns:
                 qnorm['ATAC.RPM'] = qnorm['DHS.RPM']
 
-            if qnorm_method == "rank":
-                #print("There are more candidate regions than was used to generate qnorm file. Using ranks for qnorm")
-                interpfunc = interpolate.interp1d(qnorm['rank'], qnorm[col], kind='linear', fill_value='extrapolate')
-                df[col_dict[col]] = interpfunc((1 - df[col + ".quantile"]) * nRegions).clip(0)
-            elif qnorm_method == "quantile":
-                #print("There are less candidate regions than was used to generate qnorm file. Using quantiles for qnorm")
-                interpfunc = interpolate.interp1d(qnorm['quantile'], qnorm[col], kind='linear', fill_value='extrapolate')
-                df[col_dict[col]] = interpfunc(df[col + ".quantile"]).clip(0)
+            if not separate_promoters:
+                qnorm = qnorm.loc[qnorm['enh_class' == "any"]]
+                if qnorm_method == "rank":
+                    interpfunc = interpolate.interp1d(qnorm['rank'], qnorm[col], kind='linear', fill_value='extrapolate')
+                    df[col_dict[col]] = interpfunc((1 - df[col + ".quantile"]) * nRegions).clip(0)
+                elif qnorm_method == "quantile":
+                    interpfunc = interpolate.interp1d(qnorm['quantile'], qnorm[col], kind='linear', fill_value='extrapolate')
+                    df[col_dict[col]] = interpfunc(df[col + ".quantile"]).clip(0)
+            else:
+                for enh_class in ['promoter','nonpromoter']:
+                    this_qnorm = qnorm.loc[qnorm['enh_class'] == enh_class]
+
+                    #Need to recompute quantiles within each class
+                    if enh_class == 'promoter':
+                        this_idx = df.index[np.logical_or(df['class'] == "tss", df['class'] == "promoter")]
+                    else:
+                        this_idx = df.index[np.logical_and(df['class'] != "tss" , df['class'] != "promoter")]
+                    df.loc[this_idx, col + enh_class + ".quantile"] = df.loc[this_idx, col].rank()/len(this_idx)
+
+                    if qnorm_method == "rank":
+                        interpfunc = interpolate.interp1d(this_qnorm['rank'], this_qnorm[col], kind='linear', fill_value='extrapolate')
+                        df.loc[this_idx, col_dict[col]] = interpfunc((1 - df.loc[this_idx, col + enh_class + ".quantile"]) * len(this_idx)).clip(0)
+                    elif qnorm_method == "quantile":
+                        interpfunc = interpolate.interp1d(this_qnorm['quantile'], this_qnorm[col], kind='linear', fill_value='extrapolate')
+                        df.loc[this_idx, col_dict[col]] = interpfunc(df.loc[this_idx, col + enh_class + ".quantile"]).clip(0)
 
     return df

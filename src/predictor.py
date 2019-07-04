@@ -28,7 +28,7 @@ class Predictor(object):
         #HiC adjustment parameters
         self.tss_hic_contribution = args['tss_hic_contribution']
         self.hic_pseudocount_distance = args['hic_pseudocount_distance']
-        self.hic_cap = args['hic_cap']
+        self.hic_cap = 100 #args['hic_cap']
 
     def estimate_contact_probability_from_distance(self, distance):
         return self.distance_model(distance)
@@ -58,9 +58,9 @@ class Predictor(object):
 
         is_self_tss = enhancers['isSelfPromoter'].values
         if sum(is_self_tss) == 0:
-            print("No candidate element overlapping tss of {} {} {}. May want to investigate!".format(gene['name'], gene['chr'], gene['tss']))
+            print("No candidate self-promoter of {} {} {}. May want to investigate!".format(gene['name'], gene['chr'], gene['tss']))
         elif sum(is_self_tss) > 1:
-            print("Found multiple elements overlapping tss of {} {} {}. May want to investigate - but okay if candidate regions are not merged!".format(gene['name'], gene['chr'], gene['tss']))
+            print("Found multiple self-promoters of {} {} {}. May want to investigate - but okay if candidate regions are not merged!".format(gene['name'], gene['chr'], gene['tss']))
 
 
         #Get Hi-C data
@@ -107,8 +107,7 @@ class Predictor(object):
             'TargetChr' : nearby_enhancers.chr.values[0],
             'TargetGeneTSS' : nearby_enhancers.TargetGeneTSS.values[0],
             'nEnhancersConsidered' : int(nearby_enhancers.shape[0]),
-            'nDistalEnhancersPredicted' : int(sum(nearby_enhancers.loc[~nearby_enhancers['isPromoterElement'], args.score_column] > args.threshold)),
-            'Total.Score' : sum(nearby_enhancers.loc[:,'ABC.Score'].apply(lambda x: x))
+            'nDistalEnhancersPredicted' : int(sum(nearby_enhancers.loc[~nearby_enhancers['isPromoterElement'], args.score_column] > args.threshold))
             })
         return stats
 

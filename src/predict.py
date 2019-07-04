@@ -24,7 +24,6 @@ def get_model_argument_parser():
 
     #hic
     parser.add_argument('--HiCdir', help="Directory with hic bedgraphs")
-    parser.add_argument('--hic_cap', type=float, default=100, help="HiC cap (in normalized units 0-100)")
     parser.add_argument('--tss_hic_contribution', type=float, default=100, help="Weighting of diagonal bin of hic matrix as a percentage of its neighbors")
     parser.add_argument('--hic_pseudocount_distance', type=int, default=1e6, help="A pseudocount is added equal to the powerlaw fit at this distance")
 
@@ -102,8 +101,9 @@ def main():
             nearby_enhancers = enhancers.within_range(gene.chr, gene.tss - args.window, gene.tss + args.window)
             predictor.predict_from_normalized_to_enhancers(nearby_enhancers, gene, args.window, tss_slop=args.tss_slop)
             
-            col_names = ['chr','start','end','TargetGene','TargetGeneTSS','class','ABC.Score','powerlaw.Score','distance','hic.distance','hic.distance.adj','estimatedCP','estimatedCP.adj','normalized_dhs','normalized_atac','activity_base','normalized_h3k27ac','TargetGeneExpression','TargetGeneTSSActivityQuantile']
-            col_names = list(set(nearby_enhancers.columns) & set(col_names))
+            col_names = ['chr','start','end','class','TargetGene','TargetGeneTSS','ABC.Score','powerlaw.Score','distance','hic.distance','hic.distance.adj','estimatedCP','estimatedCP.adj','normalized_dhs','normalized_atac','activity_base','normalized_h3K27ac','TargetGeneExpression','TargetGenePromoterActivityQuantile']
+            col_names = [col for col in col_names if col in nearby_enhancers.columns]
+            #col_names = list(set(nearby_enhancers.columns) & set(col_names))
 
             if not args.skip_gene_files:
                 if not args.skinny_gene_files:
@@ -123,6 +123,10 @@ def main():
                 print("{} enhancers predicted for {}".format(positives.shape[0], gene["name"]))
                 all_positive_list.append(positives)
 
+            #Consider a gene as failed if all its ABC Scores are nan
+            if all(nearby_enhancers[args.score_column].isnull().tolist()):
+                failed_genes.append(gene["chr"] + "\t" + gene["name"])
+
             #Add gene to gene summary file
             if nearby_enhancers.shape[0] > 0:
                 stats = predictor.get_gene_prediction_stats(args, nearby_enhancers)
@@ -139,7 +143,7 @@ def main():
     if args.score_column is not None:
         all_positive = pd.concat(all_positive_list)
         all_positive.to_csv(pred_file, sep="\t", index=False, header=True, float_format="%.4f")
-        write_connections_bedpe_format(all_positive, outfile=os.path.join(args.outdir, "Predictions.bedpe"), score_column=args.score_column)
+        write_connections_bedpe_format(all_positive, outfile=os.path.join(args.outdir, "EnhancerPredictions.bedpe"), score_column=args.score_column)
 
     gene_stats = pd.concat(gene_stats, axis=1).T
     gene_stats.to_csv(os.path.join(args.outdir, "GenePredictionStats.txt"), sep="\t", index=False)
