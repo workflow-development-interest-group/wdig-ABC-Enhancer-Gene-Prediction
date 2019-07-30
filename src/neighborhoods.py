@@ -519,6 +519,11 @@ def get_features(args):
     if args.DHS:
         features['DHS'] = args.DHS.split(",")
 
+    if args.supplementary_features is not None:
+        supp = pd.read_csv(args.supplementary_features, sep="\t")
+        for idx,row in supp.iterrows():
+            features[row['feature_name']] = row['file'].split(",")
+
     return features
 
 def determine_accessibility_feature(args):

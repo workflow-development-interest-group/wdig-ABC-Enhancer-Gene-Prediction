@@ -37,6 +37,7 @@ def parseargs(required_args=True):
     parser.add_argument('--use_secondary_counting_method', action="store_true", help="Use a slightly slower way to count bam over bed. Also requires more memory. But is more stable")
     parser.add_argument('--chrom_sizes', required=required_args, help="Genome file listing chromosome sizes. Also requires associated .bed file")
     parser.add_argument('--enhancer_class_override', default=None, help="Annotation file to override enhancer class assignment")
+    parser.add_argument('--supplementary_features', default=None, help="Additional features to count over regions")
     parser.add_argument('--cellType', default=None, help="Name of cell type")
 
     # replace textio wrapper returned by argparse with actual filename
