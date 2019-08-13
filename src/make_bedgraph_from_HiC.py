@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     #Read genes
     genes_bed = read_bed(args.genes) 
-    genes = process_gene_bed(genes_bed, args.gene_name_annotations, args.primary_gene_identifier)
+    genes = process_gene_bed(genes_bed, args.gene_name_annotations, args.primary_gene_identifier, fail_on_nonunique=False)
 
     #Get raw hic and normalization files
     resolution = '{}kb'.format(args.resolution // 1000)

@@ -1,5 +1,4 @@
 import argparse
-import progressbar as pb
 from predictor import Predictor
 from tools import *
 import pandas as pd
@@ -19,7 +18,7 @@ def get_model_argument_parser():
     parser.add_argument('--genes', required=True, help="Genes to make predictions for. Formatted as the GeneList.txt file produced by run.neighborhoods.py")
     parser.add_argument('--outdir', required=True, help="output directory")
     parser.add_argument('--window', type=int, default=5000000, help="Make predictions for all candidate elements within this distance of the gene's TSS")
-    parser.add_argument('--threshold', type=float, required=True, default=None, help="Threshold on ABC Score to call a predicted positive")
+    parser.add_argument('--threshold', type=float, required=True, default=.022, help="Threshold on ABC Score to call a predicted positive")
     parser.add_argument('--cellType', help="Name of cell type")
 
     #hic

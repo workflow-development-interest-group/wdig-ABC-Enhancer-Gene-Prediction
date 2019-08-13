@@ -49,7 +49,7 @@ class HiCFetcher(object):
         # find best overlap
         best_interval = intervals[0]
         for i in intervals:
-            if abs(row - (i.begin + i.end) / 2) < abs(row - (best_interval.begin + best_interval.end)):
+            if abs(row - (i.begin + i.end) / 2) < abs(row - (best_interval.begin + best_interval.end)/2):
                 best_interval = i
 
         # load bedgraph    

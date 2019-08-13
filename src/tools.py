@@ -2,7 +2,7 @@ import os
 import pandas
 import pickle
 from intervaltree import IntervalTree, Interval
-import pysam
+#import pysam
 import numpy as np
 import pandas as pd
 import re
@@ -43,42 +43,6 @@ def get_score_filename(gene, outdir = None):
 def write_scores(outdir, gene, enhancers):
     outfile = get_score_filename(gene)
     enhancers.to_csv(os.path.join(outdir, outfile), sep="\t", index=False, compression="gzip", float_format="%.6f", na_rep="NaN")
-
-
-# class GenomicRangesIntervalTree(object):
-#     def __init__(self, filename, slop=0, isBed=False):
-#         if isBed:
-#             self.ranges = pandas.read_table(filename, header=None, names=['chr', 'start', 'end', 'Score'])
-#         else:
-#             self.ranges = pandas.read_table(filename)
-
-#         self.ranges['start'] = self.ranges['start'] - slop
-#         self.ranges['end'] = self.ranges['end'] + slop
-#         self.ranges['end'] = [ max(x,y) for x,y in zip(self.ranges['start']+1,self.ranges['end']) ]
-#         assert(pandas.DataFrame.all(self.ranges.start <= self.ranges.end))
-        
-#         self.intervals = {}
-#         for chr, chrdata in self.ranges.groupby('chr'):
-#             self.intervals[chr] = IntervalTree.from_tuples(zip(chrdata.start,
-#                                                                chrdata.end,
-#                                                                chrdata.index))
-
-#     def within_range(self, chr, start, end):
-#         # Returns empty data frame (0 rows) if there is no overlap
-#         if start == end:   ## Interval search doesn't like having start and end equal
-#             end = end + 1
-#         result = self.ranges.iloc[[], :].copy()
-#         if chr in self.intervals:
-#             overlaps = self.intervals[chr][start:end]
-#             indices = [idx for l, h, idx in overlaps]
-#             result = self.ranges.iloc[indices, :].copy()
-#         return result
-
-#     def overlaps(self, chr, start, end):
-#         locs = self.intervals[chr].overlaps()
-
-#     def __getitem__(self, idx):
-#         return self.ranges[idx]
 
 class GenomicRangesIntervalTree(object):
     def __init__(self, filename, slop=0, isBed=False):
