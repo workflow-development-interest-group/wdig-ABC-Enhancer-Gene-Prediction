@@ -78,6 +78,7 @@ def main():
     print("data loaded for chromosomes: {}".format(" ".join(sorted(chromosomes))))
 
     #Initialize Prediction files
+    pred_file_full = os.path.join(args.outdir, "EnhancerPredictionsFull.txt")
     pred_file = os.path.join(args.outdir, "EnhancerPredictions.txt")
     all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.txt.gz")
 
@@ -141,7 +142,8 @@ def main():
 
     if args.score_column is not None:
         all_positive = pd.concat(all_positive_list)
-        all_positive.to_csv(pred_file, sep="\t", index=False, header=True, float_format="%.4f")
+        all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.4f")
+        all_positive[['chr','start','end','TargetGene','TargetGeneTSS','ABC.Score']].to_csv(pred_file, sep="\t", index=False, header=True, float_format="%.4f")
         write_connections_bedpe_format(all_positive, outfile=os.path.join(args.outdir, "EnhancerPredictions.bedpe"), score_column=args.score_column)
 
     gene_stats = pd.concat(gene_stats, axis=1).T

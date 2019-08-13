@@ -5,7 +5,6 @@ import os
 import os.path
 from subprocess import check_call, check_output, PIPE, Popen, getoutput, CalledProcessError
 from intervaltree import IntervalTree
-from pyBigWig import open as open_bigwig
 # import pysam
 from tools import *
 import linecache
@@ -352,6 +351,7 @@ def count_tagalign(tagalign, bed_file, output, genome_sizes):
         print(p2.stderr)
 
 def count_bigwig(target, bed_file, output):
+    from pyBigWig import open as open_bigwig    
     bw = open_bigwig(target)
     bed = read_bed(bed_file)
     with open(output, "wb") as outfp:

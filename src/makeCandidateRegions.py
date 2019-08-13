@@ -14,12 +14,12 @@ def parseargs(required_args=True):
                                      epilog=epilog,
                                      formatter_class=formatter)
     readable = argparse.FileType('r')
-    parser.add_argument('--bam', required=required_args, help="bam file to call peaks on")
-    parser.add_argument('--is_paired_end', action="store_true", help="Flag denoting whether bam file is paired end. Needed for MACS2")
+    
+    parser.add_argument('--narrowPeak', required=required_args, help="narrowPeak file output by macs2. Must include summits (--call-summits)")
+    parser.add_argument('--bam', required=required_args, help="DNAase-Seq or ATAC-Seq bam file")
     parser.add_argument('--chrom_sizes', required=required_args, help="File listing chromosome size annotaions")
     parser.add_argument('--outDir', required=required_args)
     
-    parser.add_argument('--pval_cutoff', default=.1, help="pvalue cutoff for MACS2")
     parser.add_argument('--nStrongestPeaks', default=175000, help="Number of peaks to use for defining candidate regions")
     parser.add_argument('--peakExtendFromSummit', default=250, help="Number of base pairs to extend each preak from its summit")
 
@@ -33,16 +33,8 @@ def processCellType(args):
 	os.makedirs(os.path.join(args.outDir), exist_ok=True)
 	write_params(args, os.path.join(args.outDir, "params.txt"))
 
-	if args.is_paired_end:
-		macs_format = "BAMPE"
-	else:
-		macs_format = "AUTO"
-
-	peaks_file_prefix = os.path.basename(args.bam.replace(".tagAlign.gz", ".macs2").replace(".bam", ".macs2"))
-	run_macs2_callpeak(args.bam, args.outDir, peaks_file_prefix, macs_format, args.pval_cutoff, args.chrom_sizes, force=False)	
-
 	#Make candidate regions
-	make_candidate_regions_from_summits(macs_peaks = os.path.join(args.outDir, peaks_file_prefix + '_peaks.narrowPeak'), 
+	make_candidate_regions_from_summits(macs_peaks = args.narrowPeak, 
 										accessibility_file = args.bam, 
 										genome_sizes = args.chrom_sizes, 
 										regions_whitelist = args.regions_whitelist,

@@ -6,8 +6,7 @@ import argparse
 import glob
 import os
 from scipy.optimize import least_squares
-import matplotlib; matplotlib.use('Agg')
-import pylab
+#import pylab
 
 #To do: 
 #1. Check if max/min window is off by 1 bin or is working properly
