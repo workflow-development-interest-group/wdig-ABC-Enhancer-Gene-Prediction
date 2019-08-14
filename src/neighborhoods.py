@@ -193,6 +193,7 @@ def load_enhancers(outdir=".",
         print("         Genic: {}".format(sum(enhancers['isGenicElement'])))
         print("         Intergenic: {}".format(sum(enhancers['isIntergenicElement'])))
 
+    #TO DO: Should qnorm each bam file separately (before averaging). Currently qnorm being performed on the average
     enhancers = run_qnorm(enhancers, qnorm)
     enhancers = compute_activity(enhancers, default_accessibility_feature)
 
