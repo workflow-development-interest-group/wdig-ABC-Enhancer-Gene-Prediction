@@ -60,9 +60,9 @@ def main():
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
 
-    preddir = os.path.join(args.outdir, "genes")
-    if not os.path.exists(preddir):
-        os.makedirs(preddir)
+    # preddir = os.path.join(args.outdir, "genes")
+    # if not os.path.exists(preddir):
+    #     os.makedirs(preddir)
 
     write_prediction_params(args, os.path.join(args.outdir, "parameters.predict.txt"))
     
@@ -84,10 +84,9 @@ def main():
     gene_stats = []
     failed_genes = []
 
-    #TO DO
-    #Pick genes
     genes = determine_expressed_genes(genes, args.expression_cutoff, args.promoter_activity_quantile_cutoff)
 
+    #Make predictions
     chromosomes = set(enhancers['chr'])
     for chromosome in chromosomes:
         print('Making predictions for chromosome: {}'.format(chromosome))

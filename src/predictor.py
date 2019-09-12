@@ -121,7 +121,7 @@ def make_predictions(chromosome, enhancers, genes, hic_file, args):
     pred = make_pred_table(chromosome, enhancers, genes, args)
     pred = add_hic(pred, hic_file, args)
 
-    pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled']], "ABC")
+    pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled_adj']], "ABC")
     #pred = compute_score(pred, [pred['activity_base'], pred['estimatedCP.adj']], "powerlaw")
 
     return(pred)
@@ -168,6 +168,7 @@ def add_hic(pred, hic_file, args):
     pred['bin1'] = np.amin(pred[['enh_bin', 'tss_bin']], axis = 1)
     pred['bin2'] = np.amax(pred[['enh_bin', 'tss_bin']], axis = 1)
     pred = pred.merge(HiC, how = 'left', on = ['bin1','bin2'])
+    pred.fillna(value={'hic_kr' : 0}, inplace=True)
     
     #Index into sparse matrix
     #pred['hic_kr'] = [HiC[i,j] for (i,j) in pred[['enh_bin','tss_bin']].values.tolist()]
@@ -177,8 +178,8 @@ def add_hic(pred, hic_file, args):
     # Add powerlaw scaling
     pred = scale_with_powerlaw(pred, args)
 
-    #TO DO
     #Add pseudocount
+    pred = add_hic_pseudocount(pred, args)
 
     print("HiC Complete")
     #print('Elapsed time: {}'.format(time.time() - t))
@@ -221,6 +222,7 @@ def process_hic(hic_mat, args):
 
 def scale_with_powerlaw(pred, args):
 
+    #TO DO: Include Hi-C scale here?
     if ~args.scale_hic_using_powerlaw:
         pred['hic_kr_pl_scaled'] = pred['hic_kr']
     else:
@@ -232,6 +234,20 @@ def scale_with_powerlaw(pred, args):
 
     return(pred)
 
+def add_hic_pseudocount(pred, args):
+
+    #TO DO: Include Hi-C scale here - or deal with this constant issue. The pseudocount is too big
+    dists = pred['distance'] / args.hic_resolution
+    log_dists = np.log(dists + 1)
+    powerlaw_fit = np.exp(-1*args.hic_gamma * log_dists)
+    powerlaw_fit_at_ref = np.exp(-1*args.hic_gamma * np.log(args.hic_pseudocount_distance / args.hic_resolution + 1))
+    
+    pseudocount = np.amin(pd.DataFrame({'a' : powerlaw_fit, 'b' : powerlaw_fit_at_ref}), axis = 1)
+    pred['hic_pseudocount'] = pseudocount
+    pred['hic_kr_pl_scaled_adj'] = pred['hic_kr_pl_scaled'] + pseudocount
+
+    return(pred)
+
 def compute_score(enhancers, product_terms, prefix):
 
     scores = np.column_stack(product_terms).prod(axis = 1)
@@ -239,15 +255,15 @@ def compute_score(enhancers, product_terms, prefix):
     #normalized_scores = scores / (total if (total > 0) else 1)
 
     enhancers[prefix + '.Score.Numerator'] = scores
+    enhancers[prefix + '.Score'] = enhancers[prefix + '.Score.Numerator'] / enhancers.groupby('TargetGene')[prefix + '.Score.Numerator'].transform('sum')
+
     #enhancers[prefix + '.Score'] = normalized_scores
 
-    #TO DO
-    #Why is this so slow...
-    def apply_division(df):
-        df[prefix + '.Score'] = df[prefix + '.Score.Numerator'] / df[prefix + '.Score.Numerator'].sum()
-        return(df)
-
-    enhancers = enhancers.groupby('TargetGene').apply(apply_division)
+    # #Why is this so slow...
+    # def apply_division(df):
+    #     df[prefix + '.Score'] = df[prefix + '.Score.Numerator'] / df[prefix + '.Score.Numerator'].sum()
+    #     return(df)
+    #enhancers = enhancers.groupby('TargetGene').apply(apply_division)
 
     return(enhancers)
 
