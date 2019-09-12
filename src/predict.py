@@ -4,6 +4,7 @@ from tools import *
 import pandas as pd
 import numpy as np
 import sys, traceback, os, os.path
+import time
 
 def get_model_argument_parser():
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
@@ -70,7 +71,8 @@ def main():
     genes = pd.read_csv(args.genes, sep = "\t")
 
     print("reading enhancers")
-    enhancers = pd.read_csv(args.enhancers, sep = "\t")
+    enhancers_full = pd.read_csv(args.enhancers, sep = "\t")
+    enhancers = enhancers_full.loc[:,['chr','start','end','name','class','activity_base']]
 
     #Initialize Prediction files
     pred_file_full = os.path.join(args.outdir, "EnhancerPredictionsFull.txt")
@@ -90,9 +92,13 @@ def main():
     chromosomes = set(enhancers['chr'])
     for chromosome in chromosomes:
         print('Making predictions for chromosome: {}'.format(chromosome))
+        t = time.time()
+
         hic_file = get_hic_file(chromosome, args.HiCdir)
         this_chr = make_predictions(chromosome, enhancers, genes, hic_file, args)
         all_putative_list.append(this_chr)
+
+        print('Completed chromosome: {}. Elapsed time: {}'.format(chromosome, time.time() - t))
 
     # Subset predictions
     all_putative = pd.concat(all_putative_list)

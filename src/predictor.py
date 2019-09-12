@@ -202,14 +202,32 @@ def process_hic(hic_mat, args):
     assert(np.max(sums)/np.min(sums[sums > 0]) < 1.001)
     mean_sum = np.mean(sums[sums > 0])
     print('HiC Matrix has row sums of {}, making double stochastic...'.format(mean_sum))
-    kr_vec = np.repeat(np.sqrt(mean_sum), sums.shape[1])
-    norm_mat = ssp.dia_matrix((1.0 / kr_vec, [0]), (sums.shape[1], sums.shape[1]))
-    hic_mat = norm_mat * hic_mat * norm_mat
+    hic_mat = hic_mat.multiply(1/mean_sum)
+
+    #Slow version. Its a constant scalar so don't need to to the matrix multiplication
+    # kr_vec = np.repeat(np.sqrt(mean_sum), sums.shape[1])
+    # norm_mat = ssp.dia_matrix((1.0 / kr_vec, [0]), (sums.shape[1], sums.shape[1]))
+    # hic_mat = norm_mat * hic_mat * norm_mat
 
     #Adjust diagonal of matrix based on neighboring bins
-    hic_mat = hic_mat.tolil(copy=False)
-    for ii in range(1, sums.shape[1] - 1):
+    # hic_mat = hic_mat.tolil(copy=False)
+    # for ii in range(1, sums.shape[1] - 1):
+    #     hic_mat[ii,ii] = max(hic_mat[ii,ii-1], hic_mat[ii,ii+1]) * args.tss_hic_contribution / 100
+
+    #Adjust diagonal of matrix based on neighboring bins
+    #First and last rows need to be treated differently
+    last_idx = hic_mat.shape[0] - 1
+    nonzero_diag = hic_mat.nonzero()[0][hic_mat.nonzero()[0] == hic_mat.nonzero()[1]]
+    nonzero_diag = list(set(nonzero_diag) - set(np.array([last_idx])) - set(np.array([0])))
+
+    for ii in nonzero_diag:
         hic_mat[ii,ii] = max(hic_mat[ii,ii-1], hic_mat[ii,ii+1]) * args.tss_hic_contribution / 100
+
+    if hic_mat[0,0] != 0:
+        hic_mat[0, 0] = hic_mat[0,1] * args.tss_hic_contribution / 100
+
+    if hic_mat[last_idx, last_idx] != 0:
+        hic_mat[last_idx, last_idx] = hic_mat[last_idx, last_idx - 1] * args.tss_hic_contribution / 100
 
     #Turn into dataframe
     hic_mat = hic_mat.tocoo(copy=False)
@@ -220,16 +238,21 @@ def process_hic(hic_mat, args):
 
     return(hic_df)
 
+def get_powerlaw_at_distance(distances, gamma, hic_resolution):
+    dists = distances / hic_resolution
+    log_dists = np.log(dists + 1)
+    powerlaw_contact = -1*gamma * log_dists
+
+    return(powerlaw_contact)
+
 def scale_with_powerlaw(pred, args):
 
-    #TO DO: Include Hi-C scale here?
+    #TO DO: Include Hi-C scale here
     if ~args.scale_hic_using_powerlaw:
         pred['hic_kr_pl_scaled'] = pred['hic_kr']
     else:
-        dists = pred['distance'] / args.hic_resolution
-        log_dists = np.log(dists + 1)
-        powerlaw_fit = -1*args.hic_gamma * log_dists
-        powerlaw_fit_reference = -1*args.hic_gamma_reference * log_dists
+        powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma, args.hic_resolution)
+        powerlaw_fit_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma_reference, args.hic_resolution)
         pred['hic_kr_pl_scaled'] = pred['hic_kr'] * np.exp(powerlaw_fit_reference - powerlaw_fit)
 
     return(pred)
@@ -237,10 +260,8 @@ def scale_with_powerlaw(pred, args):
 def add_hic_pseudocount(pred, args):
 
     #TO DO: Include Hi-C scale here - or deal with this constant issue. The pseudocount is too big
-    dists = pred['distance'] / args.hic_resolution
-    log_dists = np.log(dists + 1)
-    powerlaw_fit = np.exp(-1*args.hic_gamma * log_dists)
-    powerlaw_fit_at_ref = np.exp(-1*args.hic_gamma * np.log(args.hic_pseudocount_distance / args.hic_resolution + 1))
+    powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma, args.hic_resolution)
+    powerlaw_fit_at_ref = get_powerlaw_at_distance(args.hic_pseudocount_distance, args.hic_gamma, args.hic_resolution)
     
     pseudocount = np.amin(pd.DataFrame({'a' : powerlaw_fit, 'b' : powerlaw_fit_at_ref}), axis = 1)
     pred['hic_pseudocount'] = pseudocount
@@ -295,6 +316,9 @@ def hic_to_sparse(filename, window, resolution):
     row = np.floor(HiC.bin1.values / resolution).astype(int)
     col = np.floor(HiC.bin2.values / resolution).astype(int)
     dat = HiC.hic_kr.values
+
+    #JN: Need both triangles in order to compute row/column sums to make double stochastic.
+    #If juicebox is upgraded to return DS matrices, then can remove one triangle
     # we want a symmetric matrix.  Easiest to do that during creation, but have to be careful of diagonal
     mask = (row != col)  # off-diagonal
     row2 = col[mask]  # note the row/col swap
