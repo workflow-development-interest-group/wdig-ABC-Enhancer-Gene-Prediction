@@ -80,13 +80,13 @@ def main():
     args.score_column = "ABC.Score"
 
     all_positive_list = []
-    all_putative = []
+    all_putative_list = []
     gene_stats = []
     failed_genes = []
 
     #TO DO
     #Pick genes
-
+    genes = determine_expressed_genes(genes, args.expression_cutoff, args.promoter_activity_quantile_cutoff)
 
     chromosomes = set(enhancers['chr'])
     for chromosome in chromosomes:
@@ -97,7 +97,10 @@ def main():
 
     # Subset predictions
     all_putative = pd.concat(all_putative_list)
-    all_positive = all_putative.iloc[np.logical_and(all_putative.TargetGene in runnable_genes, all_putative['ABC.Score'] > args.threshold)]
+    all_positive = all_putative.iloc[np.logical_and.reduce((all_putative.TargetGeneIsExpressed, all_putative['ABC.Score'] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
+
+    all_putative.to_csv(all_pred_file, sep="\t", index=False, header=True, compression="gzip", float_format="%.4f", na_rep="NaN", chunksize=100000)
+    all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.4f")
 
     # for idx, gene in genes.iterrows():
     #     if gene.chr == 'chrY' and not args.include_chrY:

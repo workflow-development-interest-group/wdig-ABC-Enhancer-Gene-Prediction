@@ -130,19 +130,26 @@ def write_connections_bedpe_format(pred, outfile, score_column):
 
     towrite.to_csv(outfile, header=False, index=False, sep = "\t")
 
-def check_gene_for_runnability(gene, expression_cutoff, activity_quantile_cutoff):
+def determine_expressed_genes(genes, expression_cutoff, activity_quantile_cutoff):
     #Evaluate whether a gene should be considered 'expressed' so that it runs through the model
 
     #A gene is runnable if:
     #It is expressed OR (there is no expression AND its promoter has high activity)
 
-    try:
-        gene['expressed'] = gene['Expression'] >= expression_cutoff
-    except:
-        gene['expressed'] = np.NaN
+    genes['isExpressed'] = np.logical_or(genes.Expression >= expression_cutoff, np.logical_and(np.isnan(genes.Expression), genes.PromoterActivityQuantile >= activity_quantile_cutoff))
 
-    is_active = gene["PromoterActivityQuantile"] >= activity_quantile_cutoff
-    missing_expression = np.isnan(gene.Expression) or (gene.Expression is None) or (gene.Expression is "")
-    should_run = (gene.expressed is True) or (missing_expression and is_active)
+    return(genes)
 
-    return(should_run)
+    # def is_expressed(gene):
+    #     try:
+    #         gene['expressed'] = gene['Expression'] >= expression_cutoff
+    #     except:
+    #         gene['expressed'] = np.NaN
+
+    #     is_active = gene["PromoterActivityQuantile"] >= activity_quantile_cutoff
+    #     missing_expression = np.isnan(gene.Expression) or (gene.Expression is None) or (gene.Expression is "")
+    #     should_run = (gene.expressed is True) or (missing_expression and is_active)
+
+    #     return(should_run)
+
+
