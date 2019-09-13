@@ -238,10 +238,23 @@ def process_hic(hic_mat, args):
 
     return(hic_df)
 
-def get_powerlaw_at_distance(distances, gamma, hic_resolution):
+def get_powerlaw_at_distance(distances, hic_resolution, gamma):
     dists = distances / hic_resolution
     log_dists = np.log(dists + 1)
-    powerlaw_contact = -1*gamma * log_dists
+
+    #Determine scale parameter
+    #A powerlaw distribution has two parameters: the exponent and the minimum domain value 
+    #In our case, the minimum domain value is always constant (equal to 2 HiC bins) so there should only be 1 parameter
+    #The current fitting approach does a linear regression in log-log space which produces both a slope (gamma) and a intercept (scale)
+    #Empirically there is a linear relationship between these parameters (which makes sense since we expect only a single parameter distribution)
+    #It should be possible to analytically solve for scale using gamma. But this doesn't quite work since the hic data does not actually follow a power-law
+    #So could pass in the scale parameter explicity here. Or just kludge it as I'm doing now
+    #TO DO: Eventually the pseudocount should be replaced with a more appropriate smoothing procedure.
+
+    #7.03 and 4.33 come from a linear regression of scale on gamma across 20 hic cell types at 5kb resolution. Do the params change across resolutions?
+    scale = -7.03 + 4.33 * gamma
+
+    powerlaw_contact = np.exp(scale + -1*gamma * log_dists)
 
     return(powerlaw_contact)
 
@@ -251,8 +264,8 @@ def scale_with_powerlaw(pred, args):
     if ~args.scale_hic_using_powerlaw:
         pred['hic_kr_pl_scaled'] = pred['hic_kr']
     else:
-        powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma, args.hic_resolution)
-        powerlaw_fit_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma_reference, args.hic_resolution)
+        powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma)
+        powerlaw_fit_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma_reference)
         pred['hic_kr_pl_scaled'] = pred['hic_kr'] * np.exp(powerlaw_fit_reference - powerlaw_fit)
 
     return(pred)
@@ -260,8 +273,8 @@ def scale_with_powerlaw(pred, args):
 def add_hic_pseudocount(pred, args):
 
     #TO DO: Include Hi-C scale here - or deal with this constant issue. The pseudocount is too big
-    powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma, args.hic_resolution)
-    powerlaw_fit_at_ref = get_powerlaw_at_distance(args.hic_pseudocount_distance, args.hic_gamma, args.hic_resolution)
+    powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma)
+    powerlaw_fit_at_ref = get_powerlaw_at_distance(args.hic_pseudocount_distance, args.hic_resolution, args.hic_gamma)
     
     pseudocount = np.amin(pd.DataFrame({'a' : powerlaw_fit, 'b' : powerlaw_fit_at_ref}), axis = 1)
     pred['hic_pseudocount'] = pseudocount
