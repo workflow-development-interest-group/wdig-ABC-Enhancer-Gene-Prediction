@@ -11,7 +11,7 @@ def make_candidate_regions_from_summits(macs_peaks, accessibility_file, genome_s
     # 2. Take top N regions, get summits, extend summits, merge
 
     outfile = os.path.join(outdir, os.path.basename(macs_peaks) + ".candidateRegions.bed")
-    raw_counts_outfile = os.path.join(outdir, os.path.basename(macs_peaks) + os.path.basename(accessibility_file) + ".Counts.bed")
+    raw_counts_outfile = os.path.join(outdir, os.path.basename(macs_peaks) + "." + os.path.basename(accessibility_file) + ".Counts.bed")
 
     if regions_whitelist:
     	whitelist_command = "(bedtools intersect -a {regions_whitelist} -b {genome_sizes}.bed -wa | cut -f 1-3 && cat) |"
