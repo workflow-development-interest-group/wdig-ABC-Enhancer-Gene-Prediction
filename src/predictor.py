@@ -143,7 +143,7 @@ def make_pred_table(chromosome, enh, genes, args):
     genes.columns = ['TargetGene', 'TargetGeneTSS', 'TargetGeneExpression', 'TargetGenePromoterActivityQuantile','TargetGeneIsExpressed','temp_merge_key']
     
     #Make cartesian product and then subset to EG pairs within window. 
-    #TO DO: Replace with equivalent of bedtools intersect or GRanges overlaps 
+    #TO DO: Replace with pyranges equivalent of bedtools intersect or GRanges overlaps 
     pred = pd.merge(enh, genes, on = 'temp_merge_key')
 
     pred['enh_midpoint'] = (pred['start'] + pred['end'])/2
@@ -332,6 +332,7 @@ def hic_to_sparse(filename, window, resolution):
 
     #JN: Need both triangles in order to compute row/column sums to make double stochastic.
     #If juicebox is upgraded to return DS matrices, then can remove one triangle
+    #TO DO: Remove one triangle when juicebox is updated.
     # we want a symmetric matrix.  Easiest to do that during creation, but have to be careful of diagonal
     mask = (row != col)  # off-diagonal
     row2 = col[mask]  # note the row/col swap

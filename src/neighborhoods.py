@@ -203,6 +203,8 @@ def load_enhancers(outdir=".",
                 sep='\t', index=False, header=False)
 
 def assign_enhancer_classes(enhancers, genes, tss_slop=500, class_override_file=None, cellType=None):
+    # TO DO: use pyranges
+    
     # build interval trees
     tss_intervals = {}
     gene_intervals = {}
