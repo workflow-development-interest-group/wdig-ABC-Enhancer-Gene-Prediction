@@ -1,7 +1,7 @@
 import os
 import pandas
 import pickle
-from intervaltree import IntervalTree, Interval
+#from intervaltree import IntervalTree, Interval
 #import pysam
 import numpy as np
 import pandas as pd

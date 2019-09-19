@@ -280,7 +280,7 @@ def run_count_reads(target, output, bed_file, genome_sizes, use_fast_count):
         raise ValueError("File {} name was not in .bam, .tagAlign.gz, .bw".format(target))
 
 
-def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verbose=False):
+def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verbose=True):
     completed = True
         
     #Fast count:

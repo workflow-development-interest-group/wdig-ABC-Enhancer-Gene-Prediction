@@ -1,11 +1,12 @@
 import numpy as np
-from proximity import HiCFetcher, DistanceModel
-import json
+#from proximity import HiCFetcher, DistanceModel
+#import json
 import pandas as pd
 from tools import get_gene_name
 import sys
 import scipy.sparse as ssp
 import time
+import pyranges as pr
 
 
 
@@ -118,8 +119,11 @@ def get_hic_file(chromosome, hic_dir):
     return '/seq/lincRNA/RAP/External/Rao2014-HiC/K562/5kb_resolution_intrachromosomal/' + chromosome + '/MAPQGE30/' + chromosome + '_5kb.KRobserved'
 
 def make_predictions(chromosome, enhancers, genes, hic_file, args):
-    pred = make_pred_table(chromosome, enhancers, genes, args)
-    pred = add_hic(pred, hic_file, args)
+    enh = enhancers.loc[enhancers['chr'] == chromosome, :]
+    genes = genes.loc[genes['chr'] == chromosome, :]
+
+    pred = make_pred_table(chromosome, enh, genes, args)
+    pred = add_hic(enh, genes, pred, hic_file, chromosome, args)
 
     pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled_adj']], "ABC")
     #pred = compute_score(pred, [pred['activity_base'], pred['estimatedCP.adj']], "powerlaw")
@@ -129,46 +133,79 @@ def make_predictions(chromosome, enhancers, genes, hic_file, args):
 def make_pred_table(chromosome, enh, genes, args):
     print('Making putative predictions table...')
     t = time.time()
+ 
+    if args.use_pyranges:
+        enh['enh_midpoint'] = (enh['start'] + enh['end'])/2
+        enh['enh_idx'] = enh.index
+        genes['gene_idx'] = genes.index
+        enh_pr = df_to_pyranges(enh)
+        genes_pr = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', start_slop=args.window, end_slop = args.window)
+
+        pred = enh_pr.join(genes_pr).df.drop(['Start_b','End_b','chr_b','Chromosome','Start','End'], axis = 1)
+        #pred['enh_midpoint'] = (pred['start'] + pred['end'])/2
+        pred['distance'] = abs(pred['enh_midpoint'] - pred['TargetGeneTSS'])
+        pred = pred.loc[pred['distance'] < args.window,:] #for backwards compatability
+
+    else:
+        enh['temp_merge_key'] = 0
+        genes['temp_merge_key'] = 0
+
+        #Make cartesian product and then subset to EG pairs within window. 
+        #TO DO: Replace with pyranges equivalent of bedtools intersect or GRanges overlaps 
+        pred = pd.merge(enh, genes, on = 'temp_merge_key')
+
+        pred['enh_midpoint'] = (pred['start'] + pred['end'])/2
+        pred['distance'] = abs(pred['enh_midpoint'] - pred['TargetGeneTSS'])
+        pred = pred.loc[pred['distance'] < args.window,:]
+
+        print('Done. There are {} putative enhancers for chromosome {}'.format(pred.shape[0], chromosome))
+        print('Elapsed time: {}'.format(time.time() - t))
+
+    return pred
+    
+def df_to_pyranges(df, start_col='start', end_col='end', chr_col='chr', start_slop=0, end_slop=0):
+    df['Chromosome'] = df[chr_col]
+    df['Start'] = df[start_col] - start_slop
+    df['End'] = df[end_col] + end_slop
+
+    return(pr.PyRanges(df))
+
+def add_hic(enh, genes, pred, hic_file, chromosome, args):
+    print('Begin HiC')
+    #t = time.time()
+    HiC = load_hic(hic_file, chromosome, args)
 
     # import pdb
     # pdb.set_trace()
 
-    enh['temp_merge_key'] = 0
-    genes['temp_merge_key'] = 0
 
-    enh = enh.loc[enh['chr'] == chromosome, :]
-    genes = genes.loc[genes['chr'] == chromosome, :]
-
-    genes = genes[['symbol','tss','Expression','PromoterActivityQuantile','isExpressed','temp_merge_key']]
-    genes.columns = ['TargetGene', 'TargetGeneTSS', 'TargetGeneExpression', 'TargetGenePromoterActivityQuantile','TargetGeneIsExpressed','temp_merge_key']
-    
-    #Make cartesian product and then subset to EG pairs within window. 
-    #TO DO: Replace with pyranges equivalent of bedtools intersect or GRanges overlaps 
-    pred = pd.merge(enh, genes, on = 'temp_merge_key')
-
-    pred['enh_midpoint'] = (pred['start'] + pred['end'])/2
-    pred['distance'] = abs(pred['enh_midpoint'] - pred['TargetGeneTSS'])
-    pred = pred.loc[pred['distance'] < args.window,:]
-
-    print('Done. There are {} putative enhancers for chromosome {}'.format(pred.shape[0], chromosome))
-    print('Elapsed time: {}'.format(time.time() - t))
-
-    return pred
-    
-def add_hic(pred, hic_file, args):
-    print('Begin HiC')
-    #t = time.time()
-    HiC = load_hic(hic_file, args)
-
-    #Add hic
-    #Could also do this by indexing into the sparse matrix (instead of merge) but this seems to be slower
+    #Add hic to pred table
     t = time.time()
-    pred['enh_bin'] = np.floor(pred['enh_midpoint'] / args.hic_resolution).astype(int)
-    pred['tss_bin'] = np.floor(pred['TargetGeneTSS'] / args.hic_resolution).astype(int)
-    pred['bin1'] = np.amin(pred[['enh_bin', 'tss_bin']], axis = 1)
-    pred['bin2'] = np.amax(pred[['enh_bin', 'tss_bin']], axis = 1)
-    pred = pred.merge(HiC, how = 'left', on = ['bin1','bin2'])
-    pred.fillna(value={'hic_kr' : 0}, inplace=True)
+    if args.use_pyranges:
+        #Use pyranges to compute overlaps between enhancers/genes and hic bedpe table
+        HiC['hic_idx'] = HiC.index
+        hic1 = df_to_pyranges(HiC, start_col='x1', end_col='x2')
+        hic2 = df_to_pyranges(HiC, start_col='y1', end_col='y2')
+
+        enh_hic1 = df_to_pyranges(enh, start_col = 'enh_midpoint', end_col = 'enh_midpoint', end_slop = 1).join(hic1).df
+        genes_hic2 = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', end_slop = 1).join(hic2).df
+        ovl12 = enh_hic1[['enh_idx','hic_idx','hic_kr']].merge(genes_hic2[['gene_idx', 'hic_idx']], on = 'hic_idx')
+
+        enh_hic2 = df_to_pyranges(enh, start_col = 'enh_midpoint', end_col = 'enh_midpoint', end_slop = 1).join(hic2).df
+        genes_hic1 = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', end_slop = 1).join(hic1).df
+        ovl21 = enh_hic2[['enh_idx','hic_idx','hic_kr']].merge(genes_hic1[['gene_idx', 'hic_idx']], on = 'hic_idx')
+
+        ovl = pd.concat([ovl12, ovl21]).drop_duplicates() #.drop('hic_idx', axis = 1)
+        pred = pred.merge(ovl, on = ['enh_idx', 'gene_idx'], how = 'left')
+        pred.fillna(value={'hic_kr' : 0}, inplace=True)
+    else:
+        #Could also do this by indexing into the sparse matrix (instead of merge) but this seems to be slower
+        pred['enh_bin'] = np.floor(pred['enh_midpoint'] / args.hic_resolution).astype(int)
+        pred['tss_bin'] = np.floor(pred['TargetGeneTSS'] / args.hic_resolution).astype(int)
+        pred['bin1'] = np.amin(pred[['enh_bin', 'tss_bin']], axis = 1)
+        pred['bin2'] = np.amax(pred[['enh_bin', 'tss_bin']], axis = 1)
+        pred = pred.merge(HiC, how = 'left', on = ['bin1','bin2'])
+        pred.fillna(value={'hic_kr' : 0}, inplace=True)
     
     #Index into sparse matrix
     #pred['hic_kr'] = [HiC[i,j] for (i,j) in pred[['enh_bin','tss_bin']].values.tolist()]
@@ -186,12 +223,27 @@ def add_hic(pred, hic_file, args):
 
     return(pred)
 
-def load_hic(hic_file, args):
+def load_hic(hic_file, chromosome, args):
     print("Loading HiC")
-    HiC_sparse_mat = hic_to_sparse(hic_file, args.window, args.hic_resolution)
-    HiC = process_hic(HiC_sparse_mat, args)
+
+    if args.hic_type == 'juicebox':
+        HiC_sparse_mat = hic_to_sparse(hic_file, args.window, args.hic_resolution)
+        HiC = process_hic(HiC_sparse_mat, args)
+        HiC = juicebox_to_bedpe(HiC, chromosome, args)
 
     return(HiC)
+
+def juicebox_to_bedpe(hic, chromosome, args):
+    hic['chr'] = chromosome
+    hic['x1'] = hic['bin1'] * args.hic_resolution
+    hic['x2'] = (hic['bin1'] + 1) * args.hic_resolution
+    hic['y1'] = hic['bin2'] * args.hic_resolution
+    hic['y2'] = (hic['bin2'] + 1) * args.hic_resolution
+
+    
+
+    return(hic)
+
 
 def process_hic(hic_mat, args):
     #Make doubly stochastic.
@@ -201,7 +253,7 @@ def process_hic(hic_mat, args):
     sums = hic_mat.sum(axis = 0)
     assert(np.max(sums)/np.min(sums[sums > 0]) < 1.001)
     mean_sum = np.mean(sums[sums > 0])
-    print('HiC Matrix has row sums of {}, making double stochastic...'.format(mean_sum))
+    print('HiC Matrix has row sums of {}, making doubly stochastic...'.format(mean_sum))
     hic_mat = hic_mat.multiply(1/mean_sum)
 
     #Slow version. Its a constant scalar so don't need to to the matrix multiplication
@@ -229,9 +281,16 @@ def process_hic(hic_mat, args):
     if hic_mat[last_idx, last_idx] != 0:
         hic_mat[last_idx, last_idx] = hic_mat[last_idx, last_idx - 1] * args.tss_hic_contribution / 100
 
+    #TO DO
+    hic_mat = ssp.triu(hic_mat)
+
     #Turn into dataframe
     hic_mat = hic_mat.tocoo(copy=False)
     hic_df = pd.DataFrame({'bin1': hic_mat.row, 'bin2': hic_mat.col, 'hic_kr': hic_mat.data})
+
+    #Prune to window
+    hic_df = hic_df.loc[abs(hic_df['bin1'] - hic_df['bin2']) <= args.window/args.hic_resolution]
+    print("HiC has {} rows after dropping windowing to {}".format(hic_df.shape[0], args.window))
 
     print('process.hic: Elapsed time: {}'.format(time.time() - t))
 
@@ -261,12 +320,14 @@ def get_powerlaw_at_distance(distances, hic_resolution, gamma):
 def scale_with_powerlaw(pred, args):
 
     #TO DO: Include Hi-C scale here
-    if ~args.scale_hic_using_powerlaw:
+    if not args.scale_hic_using_powerlaw:
         pred['hic_kr_pl_scaled'] = pred['hic_kr']
     else:
-        powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma)
-        powerlaw_fit_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma_reference)
-        pred['hic_kr_pl_scaled'] = pred['hic_kr'] * np.exp(powerlaw_fit_reference - powerlaw_fit)
+        powerlaw_estimate = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma)
+        powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma_reference)
+        pred['powerlaw_contact'] = powerlaw_estimate
+        pred['powerlaw_contact_reference'] = powerlaw_estimate_reference
+        pred['hic_kr_pl_scaled'] = pred['hic_kr'] * np.exp(powerlaw_estimate_reference - powerlaw_estimate)
 
     return(pred)
 

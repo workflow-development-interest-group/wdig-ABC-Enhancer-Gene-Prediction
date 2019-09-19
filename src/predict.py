@@ -14,6 +14,9 @@ def get_model_argument_parser():
                                      formatter_class=formatter)
     readable = argparse.FileType('r')
 
+
+    parser.add_argument('--use_pyranges', action="store_true", help="Do not make individual gene files")
+
     #Basic parameters
     parser.add_argument('--enhancers', required=True, help="Candidate enhancer regions. Formatted as the EnhancerList.txt file produced by run.neighborhoods.py")
     parser.add_argument('--genes', required=True, help="Genes to make predictions for. Formatted as the GeneList.txt file produced by run.neighborhoods.py")
@@ -27,6 +30,7 @@ def get_model_argument_parser():
     parser.add_argument('--hic_resolution', type=int, help="HiC resolution")
     parser.add_argument('--tss_hic_contribution', type=float, default=100, help="Weighting of diagonal bin of hic matrix as a percentage of its neighbors")
     parser.add_argument('--hic_pseudocount_distance', type=int, default=1e6, help="A pseudocount is added equal to the powerlaw fit at this distance")
+    parser.add_argument('--hic_type', default = 'juicebox', choices=['juicebox','bedpe'], help="format of hic files")
 
     #Power law
     parser.add_argument('--scale_hic_using_powerlaw', action="store_true", help="Scale Hi-C values using powerlaw relationship")
@@ -39,8 +43,8 @@ def get_model_argument_parser():
     parser.add_argument('--promoter_activity_quantile_cutoff', type=float, default=.4, help="Quantile cutoff on promoter activity. Used to consider a gene 'expressed' in the absence of expression data")
 
     #Output formatting
-    parser.add_argument('--skip_gene_files', action="store_true", help="Do not make individual gene files")
-    parser.add_argument('--skinny_gene_files', action="store_true", help="Use subset of columns for genes files")
+    #parser.add_argument('--skip_gene_files', action="store_true", help="Do not make individual gene files")
+    #parser.add_argument('--skinny_gene_files', action="store_true", help="Use subset of columns for genes files")
     parser.add_argument('--make_all_putative', action="store_true", help="Make big file with concatenation of all genes file")
 
     #Other
@@ -69,7 +73,10 @@ def main():
     
     print("reading genes")
     genes = pd.read_csv(args.genes, sep = "\t")
-
+    genes = determine_expressed_genes(genes, args.expression_cutoff, args.promoter_activity_quantile_cutoff)
+    genes = genes[['chr','symbol','tss','Expression','PromoterActivityQuantile','isExpressed']]
+    genes.columns = ['chr','TargetGene', 'TargetGeneTSS', 'TargetGeneExpression', 'TargetGenePromoterActivityQuantile','TargetGeneIsExpressed']
+       
     print("reading enhancers")
     enhancers_full = pd.read_csv(args.enhancers, sep = "\t")
     enhancers = enhancers_full.loc[:,['chr','start','end','name','class','activity_base']]
@@ -86,7 +93,6 @@ def main():
     gene_stats = []
     failed_genes = []
 
-    genes = determine_expressed_genes(genes, args.expression_cutoff, args.promoter_activity_quantile_cutoff)
 
     #Make predictions
     chromosomes = set(enhancers['chr'])
@@ -104,8 +110,11 @@ def main():
     all_putative = pd.concat(all_putative_list)
     all_positive = all_putative.iloc[np.logical_and.reduce((all_putative.TargetGeneIsExpressed, all_putative['ABC.Score'] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
 
-    all_putative.to_csv(all_pred_file, sep="\t", index=False, header=True, compression="gzip", float_format="%.4f", na_rep="NaN", chunksize=100000)
     all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.4f")
+
+    if args.make_all_putative:
+        all_putative.to_csv(all_pred_file, sep="\t", index=False, header=True, compression="gzip", float_format="%.4f", na_rep="NaN")
+    
 
     # for idx, gene in genes.iterrows():
     #     if gene.chr == 'chrY' and not args.include_chrY:
