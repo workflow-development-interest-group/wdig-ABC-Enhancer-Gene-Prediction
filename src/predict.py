@@ -67,10 +67,6 @@ def main():
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
 
-    # preddir = os.path.join(args.outdir, "genes")
-    # if not os.path.exists(preddir):
-    #     os.makedirs(preddir)
-
     write_prediction_params(args, os.path.join(args.outdir, "parameters.predict.txt"))
     
     print("reading genes")
@@ -87,8 +83,6 @@ def main():
     pred_file_full = os.path.join(args.outdir, "EnhancerPredictionsFull.txt")
     pred_file = os.path.join(args.outdir, "EnhancerPredictions.txt")
     all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.h5")
-
-    #args.score_column = "ABC.Score"
 
     all_positive_list = []
     all_putative_list = []
@@ -107,9 +101,6 @@ def main():
         this_enh = enhancers.loc[enhancers['chr'] == chromosome, :].copy()
         this_genes = genes.loc[genes['chr'] == chromosome, :].copy()
 
-        # import pdb
-        # pdb.set_trace()
-
         this_chr = make_predictions(chromosome, this_enh, this_genes, hic_file, args)
         all_putative_list.append(this_chr)
 
@@ -123,14 +114,23 @@ def main():
     all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.6f")
 
     if args.make_all_putative:
-        
         all_putative.to_csv(all_pred_file, sep="\t", index=False, header=True, compression="gzip", float_format="%.6f", na_rep="NaN")
         
+        #TO DO
+        #use hdf5 format?
         #Fast version
         #all_putative.to_hdf(all_pred_file, key='df')
     print("Done.")
     
+def write_prediction_params(args, file):
+    with open(file, 'w') as outfile:
+        for arg in vars(args):
+            outfile.write("--" + arg + " " + str(getattr(args, arg)) + " ")
 
+
+if __name__ == '__main__':
+    main()
+    
     # for idx, gene in genes.iterrows():
     #     if gene.chr == 'chrY' and not args.include_chrY:
     #         continue
@@ -199,11 +199,4 @@ def main():
     #     all_putative = pd.concat(all_putative_list)
     #     all_putative.to_csv(all_pred_file, sep="\t", index=False, header=True, compression="gzip", float_format="%.4f", na_rep="NaN", chunksize=100000)
 
-def write_prediction_params(args, file):
-    with open(file, 'w') as outfile:
-        for arg in vars(args):
-            outfile.write("--" + arg + " " + str(getattr(args, arg)) + " ")
 
-
-if __name__ == '__main__':
-    main()
