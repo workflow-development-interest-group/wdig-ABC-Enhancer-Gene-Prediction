@@ -119,11 +119,8 @@ def get_hic_file(chromosome, hic_dir):
     return '/seq/lincRNA/RAP/External/Rao2014-HiC/K562/5kb_resolution_intrachromosomal/' + chromosome + '/MAPQGE30/' + chromosome + '_5kb.KRobserved'
 
 def make_predictions(chromosome, enhancers, genes, hic_file, args):
-    enh = enhancers.loc[enhancers['chr'] == chromosome, :]
-    genes = genes.loc[genes['chr'] == chromosome, :]
-
-    pred = make_pred_table(chromosome, enh, genes, args)
-    pred = add_hic(enh, genes, pred, hic_file, chromosome, args)
+    pred = make_pred_table(chromosome, enhancers, genes, args)
+    pred = add_hic(enhancers, genes, pred, hic_file, chromosome, args)
 
     pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled_adj']], "ABC")
     #pred = compute_score(pred, [pred['activity_base'], pred['estimatedCP.adj']], "powerlaw")
@@ -134,7 +131,7 @@ def make_pred_table(chromosome, enh, genes, args):
     print('Making putative predictions table...')
     t = time.time()
  
-    if args.use_pyranges:
+    if True or args.use_pyranges:
         enh['enh_midpoint'] = (enh['start'] + enh['end'])/2
         enh['enh_idx'] = enh.index
         genes['gene_idx'] = genes.index
@@ -181,7 +178,7 @@ def add_hic(enh, genes, pred, hic_file, chromosome, args):
 
     #Add hic to pred table
     t = time.time()
-    if args.use_pyranges:
+    if args.hic_type == "bedpe":
         #Use pyranges to compute overlaps between enhancers/genes and hic bedpe table
         HiC['hic_idx'] = HiC.index
         hic1 = df_to_pyranges(HiC, start_col='x1', end_col='x2')
@@ -193,12 +190,12 @@ def add_hic(enh, genes, pred, hic_file, chromosome, args):
 
         enh_hic2 = df_to_pyranges(enh, start_col = 'enh_midpoint', end_col = 'enh_midpoint', end_slop = 1).join(hic2).df
         genes_hic1 = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', end_slop = 1).join(hic1).df
-        ovl21 = enh_hic2[['enh_idx','hic_idx','hic_kr']].merge(genes_hic1[['gene_idx', 'hic_idx']], on = 'hic_idx')
+        ovl21 = enh_hic2[['enh_idx','hic_idx','hic_kr']].merge(genes_hic1[['gene_idx', 'hic_idx']], on = ['hic_idx'])
 
         ovl = pd.concat([ovl12, ovl21]).drop_duplicates() #.drop('hic_idx', axis = 1)
         pred = pred.merge(ovl, on = ['enh_idx', 'gene_idx'], how = 'left')
         pred.fillna(value={'hic_kr' : 0}, inplace=True)
-    else:
+    elif args.hic_type == "juicebox":
         #Could also do this by indexing into the sparse matrix (instead of merge) but this seems to be slower
         pred['enh_bin'] = np.floor(pred['enh_midpoint'] / args.hic_resolution).astype(int)
         pred['tss_bin'] = np.floor(pred['TargetGeneTSS'] / args.hic_resolution).astype(int)
@@ -206,6 +203,8 @@ def add_hic(enh, genes, pred, hic_file, chromosome, args):
         pred['bin2'] = np.amax(pred[['enh_bin', 'tss_bin']], axis = 1)
         pred = pred.merge(HiC, how = 'left', on = ['bin1','bin2'])
         pred.fillna(value={'hic_kr' : 0}, inplace=True)
+    
+    pred.drop(['x1','x2','y1','y2','bin1','bin2','enh_idx','gene_idx','hic_idx','enh_midpoint','tss_bin','enh_bin'], inplace=True, axis = 1, errors='ignore')
     
     #Index into sparse matrix
     #pred['hic_kr'] = [HiC[i,j] for (i,j) in pred[['enh_bin','tss_bin']].values.tolist()]
@@ -227,9 +226,11 @@ def load_hic(hic_file, chromosome, args):
     print("Loading HiC")
 
     if args.hic_type == 'juicebox':
-        HiC_sparse_mat = hic_to_sparse(hic_file, args.window, args.hic_resolution)
+        HiC_sparse_mat = hic_to_sparse(hic_file, args)
         HiC = process_hic(HiC_sparse_mat, args)
-        HiC = juicebox_to_bedpe(HiC, chromosome, args)
+        #HiC = juicebox_to_bedpe(HiC, chromosome, args)
+    elif args.hic_type == 'bedpe':
+        HiC = pd.read_csv(hic_file, sep="\t")
 
     return(HiC)
 
@@ -240,21 +241,19 @@ def juicebox_to_bedpe(hic, chromosome, args):
     hic['y1'] = hic['bin2'] * args.hic_resolution
     hic['y2'] = (hic['bin2'] + 1) * args.hic_resolution
 
-    
-
     return(hic)
-
 
 def process_hic(hic_mat, args):
     #Make doubly stochastic.
     #Juicer produces a matrix with constant row/column sums. But sum is not 1 and is variable across chromosomes
     t = time.time()
 
-    sums = hic_mat.sum(axis = 0)
-    assert(np.max(sums)/np.min(sums[sums > 0]) < 1.001)
-    mean_sum = np.mean(sums[sums > 0])
-    print('HiC Matrix has row sums of {}, making doubly stochastic...'.format(mean_sum))
-    hic_mat = hic_mat.multiply(1/mean_sum)
+    if not args.hic_is_doubly_stochastic:
+        sums = hic_mat.sum(axis = 0)
+        assert(np.max(sums)/np.min(sums[sums > 0]) < 1.001)
+        mean_sum = np.mean(sums[sums > 0])
+        print('HiC Matrix has row sums of {}, making doubly stochastic...'.format(mean_sum))
+        hic_mat = hic_mat.multiply(1/mean_sum)
 
     #Slow version. Its a constant scalar so don't need to to the matrix multiplication
     # kr_vec = np.repeat(np.sqrt(mean_sum), sums.shape[1])
@@ -281,7 +280,7 @@ def process_hic(hic_mat, args):
     if hic_mat[last_idx, last_idx] != 0:
         hic_mat[last_idx, last_idx] = hic_mat[last_idx, last_idx - 1] * args.tss_hic_contribution / 100
 
-    #TO DO
+    #Remove lower triangle
     hic_mat = ssp.triu(hic_mat)
 
     #Turn into dataframe
@@ -290,7 +289,7 @@ def process_hic(hic_mat, args):
 
     #Prune to window
     hic_df = hic_df.loc[abs(hic_df['bin1'] - hic_df['bin2']) <= args.window/args.hic_resolution]
-    print("HiC has {} rows after dropping windowing to {}".format(hic_df.shape[0], args.window))
+    print("HiC has {} rows after windowing to {}".format(hic_df.shape[0], args.window))
 
     print('process.hic: Elapsed time: {}'.format(time.time() - t))
 
@@ -362,7 +361,7 @@ def compute_score(enhancers, product_terms, prefix):
 
     return(enhancers)
 
-def hic_to_sparse(filename, window, resolution):
+def hic_to_sparse(filename, args):
     t = time.time()
     HiC = pd.read_table(filename, names=["bin1", "bin2", "hic_kr"],
                         header=None, engine='c', memory_map=True)
@@ -372,7 +371,7 @@ def hic_to_sparse(filename, window, resolution):
 
     # find largest entry
     max_pos = max(HiC.bin1.max(), HiC.bin2.max())
-    hic_size = max_pos // resolution + 1
+    hic_size = max_pos // args.hic_resolution + 1
 
     # drop NaNs from hic
     HiC = HiC.loc[~np.isnan(HiC['hic_kr']),:]
@@ -387,23 +386,24 @@ def hic_to_sparse(filename, window, resolution):
     # convert to sparse matrix in CSR (compressed sparse row) format, chopping
     # down to HiC bin size.  note that conversion to scipy sparse matrices
     # accumulates repeated indices, so this will do the right thing.
-    row = np.floor(HiC.bin1.values / resolution).astype(int)
-    col = np.floor(HiC.bin2.values / resolution).astype(int)
+    row = np.floor(HiC.bin1.values / args.hic_resolution).astype(int)
+    col = np.floor(HiC.bin2.values / args.hic_resolution).astype(int)
     dat = HiC.hic_kr.values
 
     #JN: Need both triangles in order to compute row/column sums to make double stochastic.
     #If juicebox is upgraded to return DS matrices, then can remove one triangle
     #TO DO: Remove one triangle when juicebox is updated.
     # we want a symmetric matrix.  Easiest to do that during creation, but have to be careful of diagonal
-    mask = (row != col)  # off-diagonal
-    row2 = col[mask]  # note the row/col swap
-    col2 = row[mask]
-    dat2 = dat[mask]
+    if not args.hic_is_doubly_stochastic:
+        mask = (row != col)  # off-diagonal
+        row2 = col[mask]  # note the row/col swap
+        col2 = row[mask]
+        dat2 = dat[mask]
 
-    # concat and create
-    row = np.hstack((row, row2))
-    col = np.hstack((col, col2))
-    dat = np.hstack((dat, dat2))
+        # concat and create
+        row = np.hstack((row, row2))
+        col = np.hstack((col, col2))
+        dat = np.hstack((dat, dat2))
 
     print('hic.to.sparse: Elapsed time: {}'.format(time.time() - t))
 

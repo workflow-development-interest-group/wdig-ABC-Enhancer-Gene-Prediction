@@ -15,13 +15,14 @@ def get_model_argument_parser():
     readable = argparse.FileType('r')
 
 
-    parser.add_argument('--use_pyranges', action="store_true", help="Do not make individual gene files")
+    parser.add_argument('--use_pyranges', action="store_true", help="")
 
     #Basic parameters
     parser.add_argument('--enhancers', required=True, help="Candidate enhancer regions. Formatted as the EnhancerList.txt file produced by run.neighborhoods.py")
     parser.add_argument('--genes', required=True, help="Genes to make predictions for. Formatted as the GeneList.txt file produced by run.neighborhoods.py")
     parser.add_argument('--outdir', required=True, help="output directory")
     parser.add_argument('--window', type=int, default=5000000, help="Make predictions for all candidate elements within this distance of the gene's TSS")
+    parser.add_argument('--score_column', default='ABC.Score', help="Column name of score to use for thresholding")
     parser.add_argument('--threshold', type=float, required=True, default=.022, help="Threshold on ABC Score to call a predicted positive")
     parser.add_argument('--cellType', help="Name of cell type")
 
@@ -31,6 +32,7 @@ def get_model_argument_parser():
     parser.add_argument('--tss_hic_contribution', type=float, default=100, help="Weighting of diagonal bin of hic matrix as a percentage of its neighbors")
     parser.add_argument('--hic_pseudocount_distance', type=int, default=1e6, help="A pseudocount is added equal to the powerlaw fit at this distance")
     parser.add_argument('--hic_type', default = 'juicebox', choices=['juicebox','bedpe'], help="format of hic files")
+    parser.add_argument('--hic_is_doubly_stochastic', action='store_true', help="If hic matrix is already DS, can skip this step")
 
     #Power law
     parser.add_argument('--scale_hic_using_powerlaw', action="store_true", help="Scale Hi-C values using powerlaw relationship")
@@ -74,7 +76,7 @@ def main():
     print("reading genes")
     genes = pd.read_csv(args.genes, sep = "\t")
     genes = determine_expressed_genes(genes, args.expression_cutoff, args.promoter_activity_quantile_cutoff)
-    genes = genes[['chr','symbol','tss','Expression','PromoterActivityQuantile','isExpressed']]
+    genes = genes.loc[:,['chr','symbol','tss','Expression','PromoterActivityQuantile','isExpressed']]
     genes.columns = ['chr','TargetGene', 'TargetGeneTSS', 'TargetGeneExpression', 'TargetGenePromoterActivityQuantile','TargetGeneIsExpressed']
        
     print("reading enhancers")
@@ -84,36 +86,49 @@ def main():
     #Initialize Prediction files
     pred_file_full = os.path.join(args.outdir, "EnhancerPredictionsFull.txt")
     pred_file = os.path.join(args.outdir, "EnhancerPredictions.txt")
-    all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.txt.gz")
+    all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.h5")
 
-    args.score_column = "ABC.Score"
+    #args.score_column = "ABC.Score"
 
     all_positive_list = []
     all_putative_list = []
     gene_stats = []
     failed_genes = []
 
-
+    #To do: chrY?
     #Make predictions
-    chromosomes = set(enhancers['chr'])
+    chromosomes = ['chr1'] #set(enhancers['chr']) - set({'chrY','chr9'})
     for chromosome in chromosomes:
         print('Making predictions for chromosome: {}'.format(chromosome))
         t = time.time()
 
         hic_file = get_hic_file(chromosome, args.HiCdir)
-        this_chr = make_predictions(chromosome, enhancers, genes, hic_file, args)
+
+        this_enh = enhancers.loc[enhancers['chr'] == chromosome, :].copy()
+        this_genes = genes.loc[genes['chr'] == chromosome, :].copy()
+
+        # import pdb
+        # pdb.set_trace()
+
+        this_chr = make_predictions(chromosome, this_enh, this_genes, hic_file, args)
         all_putative_list.append(this_chr)
 
-        print('Completed chromosome: {}. Elapsed time: {}'.format(chromosome, time.time() - t))
+        print('Completed chromosome: {}. Elapsed time: {} \n'.format(chromosome, time.time() - t))
 
     # Subset predictions
+    print("Writing output files...")
     all_putative = pd.concat(all_putative_list)
     all_positive = all_putative.iloc[np.logical_and.reduce((all_putative.TargetGeneIsExpressed, all_putative['ABC.Score'] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
 
-    all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.4f")
+    all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.6f")
 
     if args.make_all_putative:
-        all_putative.to_csv(all_pred_file, sep="\t", index=False, header=True, compression="gzip", float_format="%.4f", na_rep="NaN")
+        
+        all_putative.to_csv(all_pred_file, sep="\t", index=False, header=True, compression="gzip", float_format="%.6f", na_rep="NaN")
+        
+        #Fast version
+        #all_putative.to_hdf(all_pred_file, key='df')
+    print("Done.")
     
 
     # for idx, gene in genes.iterrows():
