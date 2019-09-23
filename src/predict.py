@@ -82,12 +82,12 @@ def main():
     #Initialize Prediction files
     pred_file_full = os.path.join(args.outdir, "EnhancerPredictionsFull.txt")
     pred_file = os.path.join(args.outdir, "EnhancerPredictions.txt")
-    all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.h5")
+    all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.txt.gz")
 
-    all_positive_list = []
+    #all_positive_list = []
     all_putative_list = []
-    gene_stats = []
-    failed_genes = []
+    #gene_stats = []
+    #failed_genes = []
 
     #To do: chrY?
     #Make predictions
@@ -120,6 +120,8 @@ def main():
         #use hdf5 format?
         #Fast version
         #all_putative.to_hdf(all_pred_file, key='df')
+
+    make_gene_prediction_stats(all_putative, args)
     print("Done.")
     
 def write_prediction_params(args, file):

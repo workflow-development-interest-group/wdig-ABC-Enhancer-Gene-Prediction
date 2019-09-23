@@ -408,3 +408,13 @@ def hic_to_sparse(filename, args):
     print('hic.to.sparse: Elapsed time: {}'.format(time.time() - t))
 
     return ssp.csr_matrix((dat, (row, col)), (hic_size, hic_size))
+
+def make_gene_prediction_stats(pred, args):
+    summ1 = pred.groupby(['chr','TargetGene','TargetGeneTSS']).agg({'TargetGeneIsExpressed' : lambda x: set(x).pop(), 'ABC.Score' : lambda x: all(np.isnan(x)) ,  'name' : 'count'})
+    summ1.columns = ['geneIsExpressed', 'geneFailed','nEnhancersConsidered']
+
+    summ2 = pred.loc[pred['class'] != 'promoter',:].groupby(['chr','TargetGene','TargetGeneTSS']).agg({args.score_column : lambda x: sum(x > args.threshold)})
+    summ2.columns = ['nDistalEnhancersPredicted']
+    summ1 = summ1.merge(summ2, left_index=True, right_index=True)
+
+    summ1.to_csv(os.path.join(args.outdir, "GenePredictionStats.txt"), sep="\t", index=False)
