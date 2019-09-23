@@ -120,7 +120,7 @@ def get_hic_file(chromosome, hic_dir):
 
 def make_predictions(chromosome, enhancers, genes, hic_file, args):
     pred = make_pred_table(chromosome, enhancers, genes, args)
-    pred = add_hic(enhancers, genes, pred, hic_file, chromosome, args)
+    pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, chromosome, args)
 
     pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled_adj']], "ABC")
     #pred = compute_score(pred, [pred['activity_base'], pred['estimatedCP.adj']], "powerlaw")
@@ -167,7 +167,7 @@ def df_to_pyranges(df, start_col='start', end_col='end', chr_col='chr', start_sl
 
     return(pr.PyRanges(df))
 
-def add_hic(enh, genes, pred, hic_file, chromosome, args):
+def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, chromosome, args):
     print('Begin HiC')
     #t = time.time()
     HiC = load_hic(hic_file, chromosome, args)
@@ -175,40 +175,51 @@ def add_hic(enh, genes, pred, hic_file, chromosome, args):
     # import pdb
     # pdb.set_trace()
 
-
     #Add hic to pred table
+    #At this point we have a table where each row is an enhancer/gene pair. 
+    #We need to add the corresponding HiC matrix entry.
+    #If the HiC is provided in juicebox format (ie constant resolution), then we can just merge using the indices
+    #But more generally we do not want to assume constant resolution. In this case hic should be provided in bedpe format
+
     t = time.time()
     if args.hic_type == "bedpe":
         #Use pyranges to compute overlaps between enhancers/genes and hic bedpe table
+        #Consider each range of the hic matrix separately - and merge each range into both enhancers and genes. 
+        #Then remerge on hic index
+
         HiC['hic_idx'] = HiC.index
         hic1 = df_to_pyranges(HiC, start_col='x1', end_col='x2')
         hic2 = df_to_pyranges(HiC, start_col='y1', end_col='y2')
 
+        #Overlap in one direction
         enh_hic1 = df_to_pyranges(enh, start_col = 'enh_midpoint', end_col = 'enh_midpoint', end_slop = 1).join(hic1).df
         genes_hic2 = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', end_slop = 1).join(hic2).df
         ovl12 = enh_hic1[['enh_idx','hic_idx','hic_kr']].merge(genes_hic2[['gene_idx', 'hic_idx']], on = 'hic_idx')
 
+        #Overlap in the other direction
         enh_hic2 = df_to_pyranges(enh, start_col = 'enh_midpoint', end_col = 'enh_midpoint', end_slop = 1).join(hic2).df
         genes_hic1 = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', end_slop = 1).join(hic1).df
         ovl21 = enh_hic2[['enh_idx','hic_idx','hic_kr']].merge(genes_hic1[['gene_idx', 'hic_idx']], on = ['hic_idx'])
 
+        #Concatenate both directions and merge into preditions
         ovl = pd.concat([ovl12, ovl21]).drop_duplicates() #.drop('hic_idx', axis = 1)
         pred = pred.merge(ovl, on = ['enh_idx', 'gene_idx'], how = 'left')
         pred.fillna(value={'hic_kr' : 0}, inplace=True)
     elif args.hic_type == "juicebox":
+        #Merge directly using indices
         #Could also do this by indexing into the sparse matrix (instead of merge) but this seems to be slower
+        #Index into sparse matrix
+        #pred['hic_kr'] = [HiC[i,j] for (i,j) in pred[['enh_bin','tss_bin']].values.tolist()]
         pred['enh_bin'] = np.floor(pred['enh_midpoint'] / args.hic_resolution).astype(int)
         pred['tss_bin'] = np.floor(pred['TargetGeneTSS'] / args.hic_resolution).astype(int)
         pred['bin1'] = np.amin(pred[['enh_bin', 'tss_bin']], axis = 1)
         pred['bin2'] = np.amax(pred[['enh_bin', 'tss_bin']], axis = 1)
         pred = pred.merge(HiC, how = 'left', on = ['bin1','bin2'])
         pred.fillna(value={'hic_kr' : 0}, inplace=True)
-    
+
+
     pred.drop(['x1','x2','y1','y2','bin1','bin2','enh_idx','gene_idx','hic_idx','enh_midpoint','tss_bin','enh_bin'], inplace=True, axis = 1, errors='ignore')
-    
-    #Index into sparse matrix
-    #pred['hic_kr'] = [HiC[i,j] for (i,j) in pred[['enh_bin','tss_bin']].values.tolist()]
-    
+        
     print('HiC added to predictions table. Elapsed time: {}'.format(time.time() - t))
 
     # Add powerlaw scaling

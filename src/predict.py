@@ -91,7 +91,7 @@ def main():
 
     #To do: chrY?
     #Make predictions
-    chromosomes = ['chr1'] #set(enhancers['chr']) - set({'chrY','chr9'})
+    chromosomes = ['chr1'] #set(genes['chr']) - set({'chrY','chr9'})
     for chromosome in chromosomes:
         print('Making predictions for chromosome: {}'.format(chromosome))
         t = time.time()
