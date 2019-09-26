@@ -19,11 +19,11 @@ def parseargs():
                                      epilog=epilog,
                                      formatter_class=formatter)
     readable = argparse.FileType('r')
-    parser.add_argument('--hicDir', help="Directory containing bedgraphs. All files named *chr*.bg.gz will be loaded")
+    parser.add_argument('--hicDir', help="Directory containing observed HiC KR normalized matrices. File naming and structure should be: hicDir/chr*/chr*.KRobserved")
     parser.add_argument('--outDir', help="Output directory")
     parser.add_argument('--resolution', default=5000, type=int, help="Resolution of hic dataset (in bp)")
-    parser.add_argument('--minWindow', default=10000, type=int, help="Minimum distance from gene TSS to compute normalizations (bp)")
-    parser.add_argument('--maxWindow', default=1000000, type=int, help="Maximum distance from gene TSS to use to compute normalizations (bp)")
+    parser.add_argument('--minWindow', default=5000, type=int, help="Minimum distance between bins to include in powerlaw fit (bp). Recommended to be at >= resolution to avoid using the diagonal of the HiC Matrix")
+    parser.add_argument('--maxWindow', default=1000000, type=int, help="Maximum distance between bins to include in powerlaw fit (bp)")
 
     args = parser.parse_args()
     return(args)
@@ -46,7 +46,7 @@ def main():
     res.to_csv(os.path.join(args.outDir, 'hic.powerlaw.txt'), sep='\t', index=False, header=True)
 
 def load_hic_juicebox(args):
-    file_list = glob.glob(os.path.join(args.hicDir,'chr*/*.KRobserved'))
+    file_list = glob.glob(os.path.join(args.hicDir,'chr*/chr*.KRobserved'))
 
     all_data_list = []
     for this_file in file_list:

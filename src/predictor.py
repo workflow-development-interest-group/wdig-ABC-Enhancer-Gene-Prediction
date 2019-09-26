@@ -16,6 +16,7 @@ def get_hic_file(chromosome, hic_dir):
 def make_predictions(chromosome, enhancers, genes, hic_file, args):
     pred = make_pred_table(chromosome, enhancers, genes, args)
     pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, chromosome, args)
+    pred = annotate_predictions(pred)
 
     pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled_adj']], "ABC")
     #pred = compute_score(pred, [pred['activity_base'], pred['estimatedCP.adj']], "powerlaw")
@@ -64,7 +65,6 @@ def df_to_pyranges(df, start_col='start', end_col='end', chr_col='chr', start_sl
 
 def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, chromosome, args):
     print('Begin HiC')
-    #t = time.time()
     HiC = load_hic(hic_file = hic_file, hic_type = args.hic_type, hic_resolution = args.hic_resolution, tss_hic_contribution = args.tss_hic_contribution, window = args.window, min_window = 0)
 
     # import pdb
@@ -184,6 +184,11 @@ def compute_score(enhancers, product_terms, prefix):
     enhancers[prefix + '.Score'] = enhancers[prefix + '.Score.Numerator'] / enhancers.groupby('TargetGene')[prefix + '.Score.Numerator'].transform('sum')
 
     return(enhancers)
+
+def annotate_predictions(pred):
+    #Add is self promoter etc
+
+    return(pred)
 
 def make_gene_prediction_stats(pred, args):
     summ1 = pred.groupby(['chr','TargetGene','TargetGeneTSS']).agg({'TargetGeneIsExpressed' : lambda x: set(x).pop(), 'ABC.Score' : lambda x: all(np.isnan(x)) ,  'name' : 'count'})

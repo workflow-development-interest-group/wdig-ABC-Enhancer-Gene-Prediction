@@ -27,9 +27,10 @@ def get_model_argument_parser():
     parser.add_argument('--cellType', help="Name of cell type")
 
     #hic
+    #To do: validate params
     parser.add_argument('--HiCdir', help="HiC directory")
     parser.add_argument('--hic_resolution', type=int, help="HiC resolution")
-    parser.add_argument('--tss_hic_contribution', type=float, default=100, help="Weighting of diagonal bin of hic matrix as a percentage of its neighbors")
+    parser.add_argument('--tss_hic_contribution', type=float, default=100, help="Weighting of diagonal bin of hic matrix as a percentage of the maximum of its neighboring bins")
     parser.add_argument('--hic_pseudocount_distance', type=int, default=1e6, help="A pseudocount is added equal to the powerlaw fit at this distance")
     parser.add_argument('--hic_type', default = 'juicebox', choices=['juicebox','bedpe'], help="format of hic files")
     parser.add_argument('--hic_is_doubly_stochastic', action='store_true', help="If hic matrix is already DS, can skip this step")
@@ -51,7 +52,7 @@ def get_model_argument_parser():
 
     #Other
     parser.add_argument('--tss_slop', type=int, default=500, help="Distance from tss to search for self-promoters")
-    parser.add_argument('--include_chrY', '-y', action='store_true', help="Include Y chromosome")
+    #parser.add_argument('--include_chrY', '-y', action='store_true', help="Include Y chromosome")
 
     return parser
 
@@ -83,15 +84,10 @@ def main():
     pred_file_full = os.path.join(args.outdir, "EnhancerPredictionsFull.txt")
     pred_file = os.path.join(args.outdir, "EnhancerPredictions.txt")
     all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.txt.gz")
-
-    #all_positive_list = []
     all_putative_list = []
-    #gene_stats = []
-    #failed_genes = []
 
-    #To do: chrY?
     #Make predictions
-    chromosomes = ['chr1'] #set(genes['chr']) - set({'chrY','chr9'})
+    chromosomes = set(genes['chr']).intersection(set(enhancers['chr'])) 
     for chromosome in chromosomes:
         print('Making predictions for chromosome: {}'.format(chromosome))
         t = time.time()
@@ -109,7 +105,10 @@ def main():
     # Subset predictions
     print("Writing output files...")
     all_putative = pd.concat(all_putative_list)
-    all_positive = all_putative.iloc[np.logical_and.reduce((all_putative.TargetGeneIsExpressed, all_putative['ABC.Score'] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
+    if args.run_all_genes:
+        all_positive = all_putative.iloc[np.logical_and.reduce((all_putative['ABC.Score'] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
+    else:
+        all_positive = all_putative.iloc[np.logical_and.reduce((all_putative.TargetGeneIsExpressed, all_putative['ABC.Score'] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
 
     all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.6f")
 

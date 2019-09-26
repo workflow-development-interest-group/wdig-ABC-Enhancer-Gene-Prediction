@@ -13,6 +13,39 @@ import sys
 # dataframe slices/subsets error rather than warn
 pandas.set_option('mode.chained_assignment', 'raise')
 
+def run_command(command, **args):
+    print("Running command: " + command)
+    return check_call(command, shell=True, **args)
+
+def write_connections_bedpe_format(pred, outfile, score_column):
+    #Output a 2d annotation file with EP connections in bedpe format for loading into IGV
+    pred = pred.drop_duplicates()
+
+    towrite = pandas.DataFrame()
+
+    towrite["chr1"] = pred["chr"]
+    towrite["x1"] = pred['start']
+    towrite["x2"] = pred['end']
+    towrite["chr2"] = pred["chr"]
+    towrite["y1"] = pred["TargetGeneTSS"]
+    towrite["y2"] = pred["TargetGeneTSS"]
+    towrite["name"] = pred["TargetGene"] + "_" + pred["name"]
+    towrite["score"] = pred[score_column]
+    towrite["strand1"] = "."
+    towrite["strand2"] = "."
+
+    towrite.to_csv(outfile, header=False, index=False, sep = "\t")
+
+def determine_expressed_genes(genes, expression_cutoff, activity_quantile_cutoff):
+    #Evaluate whether a gene should be considered 'expressed' so that it runs through the model
+
+    #A gene is runnable if:
+    #It is expressed OR (there is no expression AND its promoter has high activity)
+
+    genes['isExpressed'] = np.logical_or(genes.Expression >= expression_cutoff, np.logical_and(np.isnan(genes.Expression), genes.PromoterActivityQuantile >= activity_quantile_cutoff))
+
+    return(genes)
+
 
 def read_genes(filename):
     genes = pandas.read_table(filename)
@@ -23,7 +56,6 @@ def read_genes(filename):
     genes.drop_duplicates(inplace=True)
 
     return genes
-
 
 def get_gene_name(gene):
     try:
@@ -106,50 +138,5 @@ class DataCache(object):
         cache_name = os.path.join(self.directory, filename.replace(os.sep, '__'))
         with open(cache_name, "wb") as f:
             pickle.dump(value, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-def run_command(command, **args):
-    print("Running command: " + command)
-    return check_call(command, shell=True, **args)
-
-def write_connections_bedpe_format(pred, outfile, score_column):
-    #Output a 2d annotation file with EP connections in bedpe format for loading into IGV
-    pred = pred.drop_duplicates()
-
-    towrite = pandas.DataFrame()
-
-    towrite["chr1"] = pred["chr"]
-    towrite["x1"] = pred['start']
-    towrite["x2"] = pred['end']
-    towrite["chr2"] = pred["chr"]
-    towrite["y1"] = pred["TargetGeneTSS"]
-    towrite["y2"] = pred["TargetGeneTSS"]
-    towrite["name"] = pred["TargetGene"] + "_" + pred["name"]
-    towrite["score"] = pred[score_column]
-    towrite["strand1"] = "."
-    towrite["strand2"] = "."
-
-    towrite.to_csv(outfile, header=False, index=False, sep = "\t")
-
-def determine_expressed_genes(genes, expression_cutoff, activity_quantile_cutoff):
-    #Evaluate whether a gene should be considered 'expressed' so that it runs through the model
-
-    #A gene is runnable if:
-    #It is expressed OR (there is no expression AND its promoter has high activity)
-
-    genes['isExpressed'] = np.logical_or(genes.Expression >= expression_cutoff, np.logical_and(np.isnan(genes.Expression), genes.PromoterActivityQuantile >= activity_quantile_cutoff))
-
-    return(genes)
-
-    # def is_expressed(gene):
-    #     try:
-    #         gene['expressed'] = gene['Expression'] >= expression_cutoff
-    #     except:
-    #         gene['expressed'] = np.NaN
-
-    #     is_active = gene["PromoterActivityQuantile"] >= activity_quantile_cutoff
-    #     missing_expression = np.isnan(gene.Expression) or (gene.Expression is None) or (gene.Expression is "")
-    #     should_run = (gene.expressed is True) or (missing_expression and is_active)
-
-    #     return(should_run)
 
 
