@@ -33,6 +33,7 @@ def parseargs():
 
 def main():
     args = parseargs()
+    os.makedirs(args.outDir, exist_ok=True)
 
     #Juicebox format
     if True or hic_type == 'juicebox':
@@ -44,7 +45,6 @@ def main():
     slope, intercept = do_powerlaw_fit(HiC)
 
     #print
-    os.makedirs(args.outDir)
     res = pandas.DataFrame({'resolution' : [args.resolution], 'maxWindow' : [args.maxWindow], 'minWindow' : [args.minWindow] ,'pl_gamma' : [slope], 'pl_scale' : [intercept] })
     res.to_csv(os.path.join(args.outDir, 'hic.powerlaw.txt'), sep='\t', index=False, header=True)
 
@@ -73,7 +73,12 @@ def load_bedpe():
 
 def do_powerlaw_fit(HiC):
     print("Running regression")
-    res = stats.linregress(np.log(HiC['dist_for_fit']), np.log(HiC['hic_kr']))
+
+    #TO DO:
+    #Print out mean/var plot of powerlaw relationship
+    HiC_summary = HiC.groupby('dist_for_fit').agg({'hic_kr' : 'sum'})
+    HiC_summary['hic_kr'] = HiC_summary.hic_kr / HiC_summary.hic_kr.sum() #technically this normalization should be over the entire genome (not just to maxWindow). Will only affect intersept though..
+    res = stats.linregress(np.log(HiC_summary.index), np.log(HiC_summary['hic_kr']))
 
     return res.slope, res.intercept
 

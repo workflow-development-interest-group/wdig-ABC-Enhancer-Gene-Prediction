@@ -1,8 +1,3 @@
-## Download and dump data from Aiden Lab juicebox, 
-## matching the file formats and directory structure of the Rao et al. 2014 data from GEO
-#
-# use Java-1.8
-
 import argparse
 import subprocess
 

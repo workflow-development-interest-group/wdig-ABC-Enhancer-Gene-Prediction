@@ -1,16 +1,17 @@
 import numpy as np
-#from proximity import HiCFetcher, DistanceModel
-#import json
 import pandas as pd
 from tools import get_gene_name
 import sys
-#import scipy.sparse as ssp
 import time
 import pyranges as pr
 from hic import *
 
 def get_hic_file(chromosome, hic_dir):
-    return '/seq/lincRNA/RAP/External/Rao2014-HiC/K562/5kb_resolution_intrachromosomal/' + chromosome + '/MAPQGE30/' + chromosome + '_5kb.KRobserved'
+    hic_file = os.path.join(hic_dir, chromosome, chromosome + ".KRobserved")
+
+    assert(len(hic_file) == 1)
+
+    return(hic_file)
 
 def make_predictions(chromosome, enhancers, genes, hic_file, args):
     pred = make_pred_table(chromosome, enhancers, genes, args)
@@ -135,15 +136,15 @@ def get_powerlaw_at_distance(distances, hic_resolution, gamma):
 
     #Determine scale parameter
     #A powerlaw distribution has two parameters: the exponent and the minimum domain value 
-    #In our case, the minimum domain value is always constant (equal to 2 HiC bins) so there should only be 1 parameter
+    #In our case, the minimum domain value is always constant (equal to 1 HiC bin) so there should only be 1 parameter
     #The current fitting approach does a linear regression in log-log space which produces both a slope (gamma) and a intercept (scale)
     #Empirically there is a linear relationship between these parameters (which makes sense since we expect only a single parameter distribution)
     #It should be possible to analytically solve for scale using gamma. But this doesn't quite work since the hic data does not actually follow a power-law
     #So could pass in the scale parameter explicity here. Or just kludge it as I'm doing now
     #TO DO: Eventually the pseudocount should be replaced with a more appropriate smoothing procedure.
 
-    #7.03 and 4.33 come from a linear regression of scale on gamma across 20 hic cell types at 5kb resolution. Do the params change across resolutions?
-    scale = -7.03 + 4.33 * gamma
+    #4.84 and 3.34 come from a linear regression of scale on gamma across 20 hic cell types at 5kb resolution. Do the params change across resolutions?
+    scale = -4.84 + 3.34 * gamma
 
     powerlaw_contact = np.exp(scale + -1*gamma * log_dists)
 
@@ -178,19 +179,9 @@ def add_hic_pseudocount(pred, args):
 def compute_score(enhancers, product_terms, prefix):
 
     scores = np.column_stack(product_terms).prod(axis = 1)
-    #total = sum(scores)
-    #normalized_scores = scores / (total if (total > 0) else 1)
 
     enhancers[prefix + '.Score.Numerator'] = scores
     enhancers[prefix + '.Score'] = enhancers[prefix + '.Score.Numerator'] / enhancers.groupby('TargetGene')[prefix + '.Score.Numerator'].transform('sum')
-
-    #enhancers[prefix + '.Score'] = normalized_scores
-
-    # #Why is this so slow...
-    # def apply_division(df):
-    #     df[prefix + '.Score'] = df[prefix + '.Score.Numerator'] / df[prefix + '.Score.Numerator'].sum()
-    #     return(df)
-    #enhancers = enhancers.groupby('TargetGene').apply(apply_division)
 
     return(enhancers)
 
