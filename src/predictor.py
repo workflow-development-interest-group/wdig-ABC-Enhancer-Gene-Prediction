@@ -27,32 +27,32 @@ def make_pred_table(chromosome, enh, genes, args):
     print('Making putative predictions table...')
     t = time.time()
  
-    if True or args.use_pyranges:
-        enh['enh_midpoint'] = (enh['start'] + enh['end'])/2
-        enh['enh_idx'] = enh.index
-        genes['gene_idx'] = genes.index
-        enh_pr = df_to_pyranges(enh)
-        genes_pr = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', start_slop=args.window, end_slop = args.window)
 
-        pred = enh_pr.join(genes_pr).df.drop(['Start_b','End_b','chr_b','Chromosome','Start','End'], axis = 1)
-        #pred['enh_midpoint'] = (pred['start'] + pred['end'])/2
-        pred['distance'] = abs(pred['enh_midpoint'] - pred['TargetGeneTSS'])
-        pred = pred.loc[pred['distance'] < args.window,:] #for backwards compatability
+    enh['enh_midpoint'] = (enh['start'] + enh['end'])/2
+    enh['enh_idx'] = enh.index
+    genes['gene_idx'] = genes.index
+    enh_pr = df_to_pyranges(enh)
+    genes_pr = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', start_slop=args.window, end_slop = args.window)
 
-    else:
-        enh['temp_merge_key'] = 0
-        genes['temp_merge_key'] = 0
+    pred = enh_pr.join(genes_pr).df.drop(['Start_b','End_b','chr_b','Chromosome','Start','End'], axis = 1)
+    #pred['enh_midpoint'] = (pred['start'] + pred['end'])/2
+    pred['distance'] = abs(pred['enh_midpoint'] - pred['TargetGeneTSS'])
+    pred = pred.loc[pred['distance'] < args.window,:] #for backwards compatability
 
-        #Make cartesian product and then subset to EG pairs within window. 
-        #TO DO: Replace with pyranges equivalent of bedtools intersect or GRanges overlaps 
-        pred = pd.merge(enh, genes, on = 'temp_merge_key')
+    # else:
+    #     enh['temp_merge_key'] = 0
+    #     genes['temp_merge_key'] = 0
 
-        pred['enh_midpoint'] = (pred['start'] + pred['end'])/2
-        pred['distance'] = abs(pred['enh_midpoint'] - pred['TargetGeneTSS'])
-        pred = pred.loc[pred['distance'] < args.window,:]
+    #     #Make cartesian product and then subset to EG pairs within window. 
+    #     #TO DO: Replace with pyranges equivalent of bedtools intersect or GRanges overlaps 
+    #     pred = pd.merge(enh, genes, on = 'temp_merge_key')
 
-        print('Done. There are {} putative enhancers for chromosome {}'.format(pred.shape[0], chromosome))
-        print('Elapsed time: {}'.format(time.time() - t))
+    #     pred['enh_midpoint'] = (pred['start'] + pred['end'])/2
+    #     pred['distance'] = abs(pred['enh_midpoint'] - pred['TargetGeneTSS'])
+    #     pred = pred.loc[pred['distance'] < args.window,:]
+
+    #     print('Done. There are {} putative enhancers for chromosome {}'.format(pred.shape[0], chromosome))
+    #     print('Elapsed time: {}'.format(time.time() - t))
 
     return pred
     
@@ -65,7 +65,7 @@ def df_to_pyranges(df, start_col='start', end_col='end', chr_col='chr', start_sl
 
 def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, chromosome, args):
     print('Begin HiC')
-    HiC = load_hic(hic_file = hic_file, hic_type = args.hic_type, hic_resolution = args.hic_resolution, tss_hic_contribution = args.tss_hic_contribution, window = args.window, min_window = 0)
+    HiC = load_hic(hic_file = hic_file, hic_type = args.hic_type, hic_resolution = args.hic_resolution, tss_hic_contribution = args.tss_hic_contribution, window = args.window, min_window = 0, gamma = args.hic_gamma)
 
     # import pdb
     # pdb.set_trace()
@@ -128,47 +128,25 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, chromosome, args):
 
     return(pred)
 
-
-
-def get_powerlaw_at_distance(distances, hic_resolution, gamma):
-    dists = (distances + 1) / hic_resolution
-    log_dists = np.log(dists)
-
-    #Determine scale parameter
-    #A powerlaw distribution has two parameters: the exponent and the minimum domain value 
-    #In our case, the minimum domain value is always constant (equal to 1 HiC bin) so there should only be 1 parameter
-    #The current fitting approach does a linear regression in log-log space which produces both a slope (gamma) and a intercept (scale)
-    #Empirically there is a linear relationship between these parameters (which makes sense since we expect only a single parameter distribution)
-    #It should be possible to analytically solve for scale using gamma. But this doesn't quite work since the hic data does not actually follow a power-law
-    #So could pass in the scale parameter explicity here. Or just kludge it as I'm doing now
-    #TO DO: Eventually the pseudocount should be replaced with a more appropriate smoothing procedure.
-
-    #4.84 and 3.34 come from a linear regression of scale on gamma across 20 hic cell types at 5kb resolution. Do the params change across resolutions?
-    scale = -4.84 + 3.34 * gamma
-
-    powerlaw_contact = np.exp(scale + -1*gamma * log_dists)
-
-    return(powerlaw_contact)
-
 def scale_with_powerlaw(pred, args):
 
-    #TO DO: Include Hi-C scale here
+    #TO DO: is this np.exp right? Shouldn't it be dependant on distance?
     if not args.scale_hic_using_powerlaw:
         pred['hic_kr_pl_scaled'] = pred['hic_kr']
     else:
-        powerlaw_estimate = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma)
-        powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma_reference)
+        powerlaw_estimate = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
+        powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma_reference)
         pred['powerlaw_contact'] = powerlaw_estimate
         pred['powerlaw_contact_reference'] = powerlaw_estimate_reference
-        pred['hic_kr_pl_scaled'] = pred['hic_kr'] * np.exp(powerlaw_estimate_reference - powerlaw_estimate)
+        pred['hic_kr_pl_scaled'] = pred['hic_kr'] * (powerlaw_estimate_reference / powerlaw_estimate)
 
     return(pred)
 
 def add_hic_pseudocount(pred, args):
 
     #TO DO: Include Hi-C scale here - or deal with this constant issue. The pseudocount is too big
-    powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_resolution, args.hic_gamma)
-    powerlaw_fit_at_ref = get_powerlaw_at_distance(args.hic_pseudocount_distance, args.hic_resolution, args.hic_gamma)
+    powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
+    powerlaw_fit_at_ref = get_powerlaw_at_distance(args.hic_pseudocount_distance, args.hic_gamma)
     
     pseudocount = np.amin(pd.DataFrame({'a' : powerlaw_fit, 'b' : powerlaw_fit_at_ref}), axis = 1)
     pred['hic_pseudocount'] = pseudocount

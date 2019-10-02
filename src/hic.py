@@ -1,16 +1,20 @@
-#from weakref import WeakValueDictionary
-
 import numpy as np
 import scipy.sparse as ssp
 import pandas as pd
 import time
 
-def load_hic(hic_file, hic_type, hic_resolution, tss_hic_contribution, window, min_window):
+def load_hic(hic_file, hic_type, hic_resolution, tss_hic_contribution, window, min_window, gamma, interpolate_nan=True, apply_diagonal_bin_correction=True):
     print("Loading HiC")
 
     if hic_type == 'juicebox':
         HiC_sparse_mat = hic_to_sparse(hic_file, hic_resolution)
-        HiC = process_hic(HiC_sparse_mat, hic_resolution, tss_hic_contribution, window, min_window)
+        HiC = process_hic(hic_mat = HiC_sparse_mat, 
+                            resolution = hic_resolution, 
+                            tss_hic_contribution = tss_hic_contribution, 
+                            window = window, 
+                            min_window = min_window, 
+                            gamma = gamma,
+                            interpolate_nan = interpolate_nan)
         #HiC = juicebox_to_bedpe(HiC, chromosome, args)
     elif hic_type == 'bedpe':
         HiC = pd.read_csv(hic_file, sep="\t")
@@ -26,14 +30,14 @@ def load_hic(hic_file, hic_type, hic_resolution, tss_hic_contribution, window, m
 
 #     return(hic)
 
-def process_hic(hic_mat, resolution, tss_hic_contribution, window, min_window=0, hic_is_doubly_stochastic=False, apply_diagonal_bin_correction=True):
+def process_hic(hic_mat, resolution, tss_hic_contribution, window, min_window=0, hic_is_doubly_stochastic=False, apply_diagonal_bin_correction=True, interpolate_nan=True, gamma=None):
     #Make doubly stochastic.
     #Juicer produces a matrix with constant row/column sums. But sum is not 1 and is variable across chromosomes
     t = time.time()
 
     if not hic_is_doubly_stochastic:
         sums = hic_mat.sum(axis = 0)
-        assert(np.max(sums)/np.min(sums[sums > 0]) < 1.001)
+        assert(np.max(sums[sums > 0])/np.min(sums[sums > 0]) < 1.001)
         mean_sum = np.mean(sums[sums > 0])
         print('HiC Matrix has row sums of {}, making doubly stochastic...'.format(mean_sum))
         hic_mat = hic_mat.multiply(1/mean_sum)
@@ -75,6 +79,14 @@ def process_hic(hic_mat, resolution, tss_hic_contribution, window, min_window=0,
     hic_df = hic_df.loc[np.logical_and(abs(hic_df['bin1'] - hic_df['bin2']) <= window/resolution, abs(hic_df['bin1'] - hic_df['bin2']) >= min_window/resolution)]
     print("HiC has {} rows after windowing between {} and {}".format(hic_df.shape[0], min_window, window))
 
+    #Fill NaN
+    #NaN in the KR normalized matrix are not zeros. They are entries where the KR algorithm did not converge
+    #So need to fill these. Use powerlaw. 
+    #Not ideal obviously but the scipy interpolation algos are either very slow or don't work since the nan structure implies that not all nans are interpolated
+    if interpolate_nan:
+        nan_loc = np.isnan(hic_df['hic_kr'])
+        hic_df.loc[nan_loc,'hic_kr'] = get_powerlaw_at_distance(abs(hic_df.loc[nan_loc,'bin1'] - hic_df.loc[nan_loc,'bin2']), gamma)
+
     print('process.hic: Elapsed time: {}'.format(time.time() - t))
 
 
@@ -92,10 +104,10 @@ def hic_to_sparse(filename, resolution, hic_is_doubly_stochastic=False):
     max_pos = max(HiC.bin1.max(), HiC.bin2.max())
     hic_size = max_pos // resolution + 1
 
-    # TO DO: Interpolate NAN
     # drop NaNs from hic
-    HiC = HiC.loc[~np.isnan(HiC['hic_kr']),:]
-    print("HiC has {} rows after dropping NaNs".format(HiC.shape[0]))
+    # If loading KR Norm, then don't want to remove NaN
+    #HiC = HiC.loc[~np.isnan(HiC['hic_kr']),:]
+    #print("HiC has {} rows after dropping NaNs".format(HiC.shape[0]))
 
     # convert to sparse matrix in CSR (compressed sparse row) format, chopping
     # down to HiC bin size.  note that conversion to scipy sparse matrices
@@ -122,3 +134,24 @@ def hic_to_sparse(filename, resolution, hic_is_doubly_stochastic=False):
     print('hic.to.sparse: Elapsed time: {}'.format(time.time() - t))
 
     return ssp.csr_matrix((dat, (row, col)), (hic_size, hic_size))
+
+def get_powerlaw_at_distance(distances, gamma, scale=None):
+    assert(gamma > 0)
+    log_dists = np.log(distances + 1)
+
+    #Determine scale parameter
+    #A powerlaw distribution has two parameters: the exponent and the minimum domain value 
+    #In our case, the minimum domain value is always constant (equal to 1 HiC bin) so there should only be 1 parameter
+    #The current fitting approach does a linear regression in log-log space which produces both a slope (gamma) and a intercept (scale)
+    #Empirically there is a linear relationship between these parameters (which makes sense since we expect only a single parameter distribution)
+    #It should be possible to analytically solve for scale using gamma. But this doesn't quite work since the hic data does not actually follow a power-law
+    #So could pass in the scale parameter explicity here. Or just kludge it as I'm doing now
+    #TO DO: Eventually the pseudocount should be replaced with a more appropriate smoothing procedure.
+
+    #4.80 and 11.63 come from a linear regression of scale on gamma across 20 hic cell types at 5kb resolution. Do the params change across resolutions?
+    if scale is None:
+        scale = -4.80 + 11.63 * gamma
+
+    powerlaw_contact = np.exp(scale + -1*gamma * log_dists)
+
+    return(powerlaw_contact)

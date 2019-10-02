@@ -39,11 +39,13 @@ def main():
         HiC = load_hic_bedpe(args)
 
     #Run 
-    slope, intercept = do_powerlaw_fit(HiC)
+    slope, intercept, hic_mean_var = do_powerlaw_fit(HiC)
 
     #print
     res = pandas.DataFrame({'resolution' : [args.resolution], 'maxWindow' : [args.maxWindow], 'minWindow' : [args.minWindow] ,'pl_gamma' : [slope], 'pl_scale' : [intercept] })
     res.to_csv(os.path.join(args.outDir, 'hic.powerlaw.txt'), sep='\t', index=False, header=True)
+
+    hic_mean_var.to_csv(os.path.join(args.outDir, 'hic.mean_var.txt'), sep='\t', index=False, header=True)
 
 def load_hic_juicebox(args):
     file_list = glob.glob(os.path.join(args.hicDir,'chr*/chr*.KRobserved'))
@@ -52,8 +54,15 @@ def load_hic_juicebox(args):
     for this_file in file_list:
         try:
             print("Working on {}".format(this_file))
-            this_data = load_hic(hic_file = this_file, hic_type = 'juicebox', hic_resolution = args.resolution, tss_hic_contribution = 100, window = args.maxWindow, min_window = args.minWindow)
-            this_data['dist_for_fit'] = abs(this_data['bin1'] - this_data['bin2'])
+            this_data = load_hic(hic_file = this_file, 
+                hic_type = 'juicebox', 
+                hic_resolution = args.resolution, 
+                tss_hic_contribution = 100, 
+                window = args.maxWindow, 
+                min_window = args.minWindow, 
+                gamma = np.nan, 
+                interpolate_nan=False)
+            this_data['dist_for_fit'] = abs(this_data['bin1'] - this_data['bin2']) * args.resolution
             all_data_list.append(this_data)
         except Exception as e:
             print(e)
@@ -75,7 +84,9 @@ def do_powerlaw_fit(HiC):
     HiC_summary['hic_kr'] = HiC_summary.hic_kr / HiC_summary.hic_kr.sum() #technically this normalization should be over the entire genome (not just to maxWindow). Will only affect intersept though..
     res = stats.linregress(np.log(HiC_summary.index), np.log(HiC_summary['hic_kr']))
 
-    return res.slope, res.intercept
+    hic_mean_var = HiC.groupby('dist_for_fit').agg({'hic_kr' : ['mean','var']})
+
+    return res.slope, res.intercept, hic_mean_var
 
 if __name__ == '__main__':
     main()

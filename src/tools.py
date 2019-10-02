@@ -139,4 +139,8 @@ class DataCache(object):
         with open(cache_name, "wb") as f:
             pickle.dump(value, f, protocol=pickle.HIGHEST_PROTOCOL)
 
+def write_params(args, file):
+    with open(file, 'w') as outfile:
+        for arg in vars(args):
+            outfile.write(arg + " " + str(getattr(args, arg)) + "\n")
 

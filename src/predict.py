@@ -83,6 +83,7 @@ def main():
     #Initialize Prediction files
     pred_file_full = os.path.join(args.outdir, "EnhancerPredictionsFull.txt")
     pred_file = os.path.join(args.outdir, "EnhancerPredictions.txt")
+    pred_file_bedpe = os.path.join(args.outdir, "EnhancerPredictions.bedpe")
     all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.txt.gz")
     all_putative_list = []
 
@@ -121,6 +122,7 @@ def main():
         #all_putative.to_hdf(all_pred_file, key='df')
 
     make_gene_prediction_stats(all_putative, args)
+    write_connections_bedpe_format(all_positive, pred_file_bedpe, args.score_column)
     print("Done.")
     
 def write_prediction_params(args, file):
