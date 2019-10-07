@@ -6,41 +6,23 @@ import time
 import pyranges as pr
 from hic import *
 
-def get_hic_file(chromosome, hic_dir):
-    hic_file = os.path.join(hic_dir, chromosome, chromosome + ".KRobserved")
-    hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".KRnorm")
-
-    is_vc = False
-    if not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
-        hic_file = os.path.join(hic_dir, chromosome, chromosome + ".VCobserved")
-        hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".VCnorm")
-
-        if not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
-            print("Could not find KR or VC normalized hic files")
-        else:
-            print("Could not find KR normalized hic file. Using VC normalized hic file")
-            is_vc = True
-
-    return hic_file, hic_norm, is_vc
-
 def make_predictions(chromosome, enhancers, genes, args):
     pred = make_pred_table(chromosome, enhancers, genes, args)
 
     hic_file, hic_norm_file, hic_is_vc = get_hic_file(chromosome, args.HiCdir)
     pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, hic_norm_file, hic_is_vc, chromosome, args)
     
-    pred = annotate_predictions(pred)
+    pred = annotate_predictions(pred, args.tss_slop)
 
     pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled_adj']], "ABC")
     pred = compute_score(pred, [pred['activity_base'], pred['powerlaw_contact_reference']], "powerlaw")
 
-    return(pred)
+    return pred
 
 def make_pred_table(chromosome, enh, genes, args):
     print('Making putative predictions table...')
     t = time.time()
  
-
     enh['enh_midpoint'] = (enh['start'] + enh['end'])/2
     enh['enh_idx'] = enh.index
     genes['gene_idx'] = genes.index
@@ -48,10 +30,10 @@ def make_pred_table(chromosome, enh, genes, args):
     genes_pr = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', start_slop=args.window, end_slop = args.window)
 
     pred = enh_pr.join(genes_pr).df.drop(['Start_b','End_b','chr_b','Chromosome','Start','End'], axis = 1)
-    #pred['enh_midpoint'] = (pred['start'] + pred['end'])/2
     pred['distance'] = abs(pred['enh_midpoint'] - pred['TargetGeneTSS'])
     pred = pred.loc[pred['distance'] < args.window,:] #for backwards compatability
 
+    #without pyranges version
     # else:
     #     enh['temp_merge_key'] = 0
     #     genes['temp_merge_key'] = 0
@@ -193,8 +175,9 @@ def compute_score(enhancers, product_terms, prefix):
 
     return(enhancers)
 
-def annotate_predictions(pred):
-    #TO DO: Add is self promoter etc
+def annotate_predictions(pred, tss_slop=500):
+    #TO DO: Add is self genic
+    pred['isSelfPromoter'] = np.logical_and.reduce((enhancers.isPromoterElement, pred.start - tss_slop < pred.TargetGeneTSS, enhancers.end + tss_slop > pred.TargetGeneTSS))
 
     return(pred)
 

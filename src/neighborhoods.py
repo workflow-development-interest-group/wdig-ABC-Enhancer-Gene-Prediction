@@ -546,8 +546,10 @@ def determine_accessibility_feature(args):
 def compute_activity(df, access_col):
     if access_col == "DHS":
         df['activity_base'] = np.sqrt(df['normalized_h3K27ac'] * df['normalized_dhs'])
+        df['activity_base_no_qnorm'] = np.sqrt(df['H3K27ac.RPM'] * df['DHS.RPM'])
     elif access_col == "ATAC":
         df['activity_base'] = np.sqrt(df['normalized_h3K27ac'] * df['normalized_atac'])
+        df['activity_base_no_qnorm'] = np.sqrt(df['H3K27ac.RPM'] * df['ATAC.RPM'])
     else:
         raise RuntimeError("At least one of ATAC or DHS must be provided!")
 

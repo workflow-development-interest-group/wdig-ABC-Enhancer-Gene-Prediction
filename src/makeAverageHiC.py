@@ -38,10 +38,10 @@ def main():
     chromosomes = ['chr22']
 
     for chromosome in chromosomes:
-        # 
         hic_list = [process_chr(cell_type, chromosome, args.basedir, args.resolution, args.ref_scale, args.ref_gamma) for cell_type in cell_types]
 
         #Make average
+        #TO DO: Enforce minimum number of cell types required for averaging
         all_hic = reduce(lambda x, y: pd.merge(x, y, on = ['bin1', 'bin2'], how = 'outer'), hic_list)
         all_hic.fillna(value=0, inplace=True)
         cols_for_avg = list(filter(lambda x:'hic_kr_' in x, all_hic.columns))

@@ -120,16 +120,7 @@ def hic_to_sparse(filename, norm_file, resolution, hic_is_doubly_stochastic=Fals
 
     # Need load norms here to know the dimensions of the hic matrix
     norms = pd.read_csv(norm_file, header=None)
-
-    # find largest entry
-    #max_pos = max(HiC.bin1.max(), HiC.bin2.max())
-    #hic_size = max_pos // resolution + 1
     hic_size = norms.shape[0]
-
-    # drop NaNs from hic
-    # If loading KR Norm, then don't want to remove NaN
-    #HiC = HiC.loc[~np.isnan(HiC['hic_kr']),:]
-    #print("HiC has {} rows after dropping NaNs".format(HiC.shape[0]))
 
     # convert to sparse matrix in CSR (compressed sparse row) format, chopping
     # down to HiC bin size.  note that conversion to scipy sparse matrices
@@ -195,4 +186,21 @@ def process_vc(hic):
     hic = norm_mat * hic
 
     return(hic)
+
+def get_hic_file(chromosome, hic_dir):
+    hic_file = os.path.join(hic_dir, chromosome, chromosome + ".KRobserved")
+    hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".KRnorm")
+
+    is_vc = False
+    if not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
+        hic_file = os.path.join(hic_dir, chromosome, chromosome + ".VCobserved")
+        hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".VCnorm")
+
+        if not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
+            RuntimeError("Could not find KR or VC normalized hic files")
+        else:
+            print("Could not find KR normalized hic file. Using VC normalized hic file")
+            is_vc = True
+
+    return hic_file, hic_norm, is_vc
 

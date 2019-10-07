@@ -14,16 +14,13 @@ def get_model_argument_parser():
                                      formatter_class=formatter)
     readable = argparse.FileType('r')
 
-
-    #parser.add_argument('--use_pyranges', action="store_true", help="")
-
     #Basic parameters
     parser.add_argument('--enhancers', required=True, help="Candidate enhancer regions. Formatted as the EnhancerList.txt file produced by run.neighborhoods.py")
     parser.add_argument('--genes', required=True, help="Genes to make predictions for. Formatted as the GeneList.txt file produced by run.neighborhoods.py")
     parser.add_argument('--outdir', required=True, help="output directory")
     parser.add_argument('--window', type=int, default=5000000, help="Make predictions for all candidate elements within this distance of the gene's TSS")
     parser.add_argument('--score_column', default='ABC.Score', help="Column name of score to use for thresholding")
-    parser.add_argument('--threshold', type=float, required=True, default=.022, help="Threshold on ABC Score to call a predicted positive")
+    parser.add_argument('--threshold', type=float, required=True, default=.022, help="Threshold on ABC Score (--score_column) to call a predicted positive")
     parser.add_argument('--cellType', help="Name of cell type")
 
     #hic
@@ -46,9 +43,8 @@ def get_model_argument_parser():
     parser.add_argument('--promoter_activity_quantile_cutoff', type=float, default=.4, help="Quantile cutoff on promoter activity. Used to consider a gene 'expressed' in the absence of expression data")
 
     #Output formatting
-    #parser.add_argument('--skip_gene_files', action="store_true", help="Do not make individual gene files")
-    #parser.add_argument('--skinny_gene_files', action="store_true", help="Use subset of columns for genes files")
     parser.add_argument('--make_all_putative', action="store_true", help="Make big file with concatenation of all genes file")
+    parser.add_argument('--use_hdf5', action="store_true", help="Write AllPutative file in hdf5 format instead of tab-delimited")
 
     #Other
     parser.add_argument('--tss_slop', type=int, default=500, help="Distance from tss to search for self-promoters")
@@ -93,11 +89,6 @@ def main():
     if not args.include_chrY:
         chromosomes.discard('chrY')
 
-    #TO DO: Support VC normalization
-    #chromosomes.discard('chr9')
-
-    chromosomes = ['chr9']
-
     for chromosome in chromosomes:
         print('Making predictions for chromosome: {}'.format(chromosome))
         t = time.time()
@@ -122,17 +113,19 @@ def main():
     all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.6f")
     all_positive[slim_cols].to_csv(pred_file_slim, sep="\t", index=False, header=True, float_format="%.6f")
 
-    if args.make_all_putative:
-        all_putative.loc[all_putative.TargetGeneIsExpressed,:].to_csv(all_pred_file_expressed, sep="\t", index=False, header=True, compression="gzip", float_format="%.6f", na_rep="NaN") #,
-        all_putative.loc[~all_putative.TargetGeneIsExpressed,:].to_csv(all_pred_file_nonexpressed, sep="\t", index=False, header=True, compression="gzip", float_format="%.6f", na_rep="NaN")
-        
-        #TO DO
-        #use hdf5 format?
-        #Fast version
-        #all_putative.to_hdf(all_pred_file, key='df')
-
     make_gene_prediction_stats(all_putative, args)
     write_connections_bedpe_format(all_positive, pred_file_bedpe, args.score_column)
+
+    if args.make_all_putative:
+        if not args.use_hdf5:
+            all_putative.loc[all_putative.TargetGeneIsExpressed,:].to_csv(all_pred_file_expressed, sep="\t", index=False, header=True, compression="gzip", float_format="%.6f", na_rep="NaN")
+            all_putative.loc[~all_putative.TargetGeneIsExpressed,:].to_csv(all_pred_file_nonexpressed, sep="\t", index=False, header=True, compression="gzip", float_format="%.6f", na_rep="NaN")
+        else:
+            all_pred_file_expressed = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.h5")
+            all_pred_file_nonexpressed = os.path.join(args.outdir, "EnhancerPredictionsAllPutativeNonExpressedGenes.h5")
+            all_putative.loc[all_putative.TargetGeneIsExpressed,:].to_hdf(all_pred_file_expressed, key='predictions')
+            all_putative.loc[~all_putative.TargetGeneIsExpressed,:].to_hdf(all_pred_file_nonexpressed, key='predictions')
+            
     print("Done.")
     
 if __name__ == '__main__':
