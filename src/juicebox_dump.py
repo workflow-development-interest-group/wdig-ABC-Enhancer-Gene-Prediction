@@ -7,7 +7,7 @@ def parseargs():
     parser.add_argument('--juicebox', required=True, default="", help="path to juicebox executable or java command invoking juicer_tools.jar. eg: 'java -jar juicer_tools.jar'")
     parser.add_argument('--resolution', default=5000, help="Resolution of HiC to download. In units of bp.")
     parser.add_argument('--outdir', default=".")
-    parser.add_argument('--include_raw', action="store_true", help="Only download the KR observed matrix (as opposed to the Raw matrix and the KR norm vector separately")
+    parser.add_argument('--include_raw', action="store_true", help="Download raw matrix in addtion to KR")
     parser.add_argument('--chromosomes', default="all", help="comma delimited list of chromosomes to download")
 
     return parser.parse_args()
@@ -29,17 +29,17 @@ def main(args):
         command = args.juicebox + " dump observed KR {0} {1} {1} BP {3} {2}/chr{1}.KRobserved".format(args.hic_file, chromosome, outdir, args.resolution)
         print(command)
         out = subprocess.getoutput(command)
+
+        ## Download KR norm file
+        command = args.juicebox + " dump norm KR {0} {1} BP {3} {2}/chr{1}.KRnorm".format(args.hic_file, chromosome, outdir, args.resolution)
+        out = subprocess.getoutput(command)
+        print(out)
         
         if args.include_raw:
 	        ## Download raw observed matrix
 	        command = args.juicebox + " dump observed NONE {0} {1} {1} BP {3} {2}/chr{1}.RAWobserved".format(args.hic_file, chromosome, outdir, args.resolution)
 	        print(command)
 	        out = subprocess.getoutput(command)
-	        
-	        ## Download KR norm file
-	        command = args.juicebox + " dump norm KR {0} {1} {1} BP {3} {2}/chr{1}.KRnorm".format(args.hic_file, chromosome, outdir, args.resolution)
-	        out = subprocess.getoutput(command)
-	        print(out)
 
 if __name__ == '__main__':
     args = parseargs()

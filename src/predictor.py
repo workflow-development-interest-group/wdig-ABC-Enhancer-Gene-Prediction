@@ -1,25 +1,38 @@
 import numpy as np
 import pandas as pd
 from tools import get_gene_name
-import sys
+import sys, os
 import time
 import pyranges as pr
 from hic import *
 
 def get_hic_file(chromosome, hic_dir):
     hic_file = os.path.join(hic_dir, chromosome, chromosome + ".KRobserved")
+    hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".KRnorm")
 
-    assert(len(hic_file) == 1)
+    is_vc = False
+    if not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
+        hic_file = os.path.join(hic_dir, chromosome, chromosome + ".VCobserved")
+        hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".VCnorm")
 
-    return(hic_file)
+        if not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
+            print("Could not find KR or VC normalized hic files")
+        else:
+            print("Could not find KR normalized hic file. Using VC normalized hic file")
+            is_vc = True
 
-def make_predictions(chromosome, enhancers, genes, hic_file, args):
+    return hic_file, hic_norm, is_vc
+
+def make_predictions(chromosome, enhancers, genes, args):
     pred = make_pred_table(chromosome, enhancers, genes, args)
-    pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, chromosome, args)
+
+    hic_file, hic_norm_file, hic_is_vc = get_hic_file(chromosome, args.HiCdir)
+    pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, hic_norm_file, hic_is_vc, chromosome, args)
+    
     pred = annotate_predictions(pred)
 
     pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled_adj']], "ABC")
-    #pred = compute_score(pred, [pred['activity_base'], pred['estimatedCP.adj']], "powerlaw")
+    pred = compute_score(pred, [pred['activity_base'], pred['powerlaw_contact_reference']], "powerlaw")
 
     return(pred)
 
@@ -63,12 +76,17 @@ def df_to_pyranges(df, start_col='start', end_col='end', chr_col='chr', start_sl
 
     return(pr.PyRanges(df))
 
-def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, chromosome, args):
+def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, hic_norm_file, hic_is_vc, chromosome, args):
     print('Begin HiC')
-    HiC = load_hic(hic_file = hic_file, hic_type = args.hic_type, hic_resolution = args.hic_resolution, tss_hic_contribution = args.tss_hic_contribution, window = args.window, min_window = 0, gamma = args.hic_gamma)
-
-    # import pdb
-    # pdb.set_trace()
+    HiC = load_hic(hic_file = hic_file, 
+                    hic_norm_file = hic_norm_file,
+                    hic_is_vc = hic_is_vc,
+                    hic_type = args.hic_type, 
+                    hic_resolution = args.hic_resolution, 
+                    tss_hic_contribution = args.tss_hic_contribution, 
+                    window = args.window, 
+                    min_window = 0, 
+                    gamma = args.hic_gamma)
 
     #Add hic to pred table
     #At this point we have a table where each row is an enhancer/gene pair. 
@@ -97,7 +115,7 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, chromosome, args):
         ovl21 = enh_hic2[['enh_idx','hic_idx','hic_kr']].merge(genes_hic1[['gene_idx', 'hic_idx']], on = ['hic_idx'])
 
         #Concatenate both directions and merge into preditions
-        ovl = pd.concat([ovl12, ovl21]).drop_duplicates() #.drop('hic_idx', axis = 1)
+        ovl = pd.concat([ovl12, ovl21]).drop_duplicates()
         pred = pred.merge(ovl, on = ['enh_idx', 'gene_idx'], how = 'left')
         pred.fillna(value={'hic_kr' : 0}, inplace=True)
     elif args.hic_type == "juicebox":
@@ -105,17 +123,29 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, chromosome, args):
         #Could also do this by indexing into the sparse matrix (instead of merge) but this seems to be slower
         #Index into sparse matrix
         #pred['hic_kr'] = [HiC[i,j] for (i,j) in pred[['enh_bin','tss_bin']].values.tolist()]
+        
         pred['enh_bin'] = np.floor(pred['enh_midpoint'] / args.hic_resolution).astype(int)
         pred['tss_bin'] = np.floor(pred['TargetGeneTSS'] / args.hic_resolution).astype(int)
-        pred['bin1'] = np.amin(pred[['enh_bin', 'tss_bin']], axis = 1)
-        pred['bin2'] = np.amax(pred[['enh_bin', 'tss_bin']], axis = 1)
-        pred = pred.merge(HiC, how = 'left', on = ['bin1','bin2'])
-        pred.fillna(value={'hic_kr' : 0}, inplace=True)
+        if not hic_is_vc:
+            #in this case the matrix is upper triangular.
+            #
+            pred['bin1'] = np.amin(pred[['enh_bin', 'tss_bin']], axis = 1)
+            pred['bin2'] = np.amax(pred[['enh_bin', 'tss_bin']], axis = 1)
+            pred = pred.merge(HiC, how = 'left', on = ['bin1','bin2'])
+            pred.fillna(value={'hic_kr' : 0}, inplace=True)
+        else:
+            # The matrix is not triangular, its full
+            # For VC assume genes correspond to rows and columns to enhancers
+            pred = pred.merge(HiC, how = 'left', left_on = ['tss_bin','enh_bin'], right_on=['bin1','bin2'])
 
+        pred.fillna(value={'hic_kr' : 0}, inplace=True)
 
     pred.drop(['x1','x2','y1','y2','bin1','bin2','enh_idx','gene_idx','hic_idx','enh_midpoint','tss_bin','enh_bin'], inplace=True, axis = 1, errors='ignore')
         
     print('HiC added to predictions table. Elapsed time: {}'.format(time.time() - t))
+
+    # QC HiC
+
 
     # Add powerlaw scaling
     pred = scale_with_powerlaw(pred, args)
@@ -129,8 +159,8 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, chromosome, args):
     return(pred)
 
 def scale_with_powerlaw(pred, args):
+    #Scale hic values to
 
-    #TO DO: is this np.exp right? Shouldn't it be dependant on distance?
     if not args.scale_hic_using_powerlaw:
         pred['hic_kr_pl_scaled'] = pred['hic_kr']
     else:
@@ -143,8 +173,8 @@ def scale_with_powerlaw(pred, args):
     return(pred)
 
 def add_hic_pseudocount(pred, args):
+    # Add a pseudocount based on the powerlaw expected count at a given distance
 
-    #TO DO: Include Hi-C scale here - or deal with this constant issue. The pseudocount is too big
     powerlaw_fit = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
     powerlaw_fit_at_ref = get_powerlaw_at_distance(args.hic_pseudocount_distance, args.hic_gamma)
     
@@ -164,7 +194,7 @@ def compute_score(enhancers, product_terms, prefix):
     return(enhancers)
 
 def annotate_predictions(pred):
-    #Add is self promoter etc
+    #TO DO: Add is self promoter etc
 
     return(pred)
 
@@ -176,4 +206,4 @@ def make_gene_prediction_stats(pred, args):
     summ2.columns = ['nDistalEnhancersPredicted']
     summ1 = summ1.merge(summ2, left_index=True, right_index=True)
 
-    summ1.to_csv(os.path.join(args.outdir, "GenePredictionStats.txt"), sep="\t", index=False)
+    summ1.to_csv(os.path.join(args.outdir, "GenePredictionStats.txt"), sep="\t", index=True)

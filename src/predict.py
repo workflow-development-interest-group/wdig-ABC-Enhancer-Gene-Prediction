@@ -15,7 +15,7 @@ def get_model_argument_parser():
     readable = argparse.FileType('r')
 
 
-    parser.add_argument('--use_pyranges', action="store_true", help="")
+    #parser.add_argument('--use_pyranges', action="store_true", help="")
 
     #Basic parameters
     parser.add_argument('--enhancers', required=True, help="Candidate enhancer regions. Formatted as the EnhancerList.txt file produced by run.neighborhoods.py")
@@ -52,7 +52,7 @@ def get_model_argument_parser():
 
     #Other
     parser.add_argument('--tss_slop', type=int, default=500, help="Distance from tss to search for self-promoters")
-    #parser.add_argument('--include_chrY', '-y', action='store_true', help="Include Y chromosome")
+    parser.add_argument('--include_chrY', '-y', action='store_true', help="Make predictions on Y chromosome")
 
     return parser
 
@@ -68,7 +68,7 @@ def main():
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
 
-    write_prediction_params(args, os.path.join(args.outdir, "parameters.predict.txt"))
+    write_params(args, os.path.join(args.outdir, "parameters.predict.txt"))
     
     print("reading genes")
     genes = pd.read_csv(args.genes, sep = "\t")
@@ -82,23 +82,30 @@ def main():
 
     #Initialize Prediction files
     pred_file_full = os.path.join(args.outdir, "EnhancerPredictionsFull.txt")
-    pred_file = os.path.join(args.outdir, "EnhancerPredictions.txt")
+    pred_file_slim = os.path.join(args.outdir, "EnhancerPredictions.txt")
     pred_file_bedpe = os.path.join(args.outdir, "EnhancerPredictions.bedpe")
-    all_pred_file = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.txt.gz")
+    all_pred_file_expressed = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.txt.gz")
+    all_pred_file_nonexpressed = os.path.join(args.outdir, "EnhancerPredictionsAllPutativeNonExpressedGenes.txt.gz")
     all_putative_list = []
 
     #Make predictions
     chromosomes = set(genes['chr']).intersection(set(enhancers['chr'])) 
+    if not args.include_chrY:
+        chromosomes.discard('chrY')
+
+    #TO DO: Support VC normalization
+    #chromosomes.discard('chr9')
+
+    chromosomes = ['chr9']
+
     for chromosome in chromosomes:
         print('Making predictions for chromosome: {}'.format(chromosome))
         t = time.time()
 
-        hic_file = get_hic_file(chromosome, args.HiCdir)
-
         this_enh = enhancers.loc[enhancers['chr'] == chromosome, :].copy()
         this_genes = genes.loc[genes['chr'] == chromosome, :].copy()
 
-        this_chr = make_predictions(chromosome, this_enh, this_genes, hic_file, args)
+        this_chr = make_predictions(chromosome, this_enh, this_genes, args)
         all_putative_list.append(this_chr)
 
         print('Completed chromosome: {}. Elapsed time: {} \n'.format(chromosome, time.time() - t))
@@ -106,15 +113,18 @@ def main():
     # Subset predictions
     print("Writing output files...")
     all_putative = pd.concat(all_putative_list)
+    slim_cols = ['chr','start','end','name','TargetGene','TargetGeneTSS',args.score_column]
     if args.run_all_genes:
-        all_positive = all_putative.iloc[np.logical_and.reduce((all_putative['ABC.Score'] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
+        all_positive = all_putative.iloc[np.logical_and.reduce((all_putative[args.score_column] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
     else:
-        all_positive = all_putative.iloc[np.logical_and.reduce((all_putative.TargetGeneIsExpressed, all_putative['ABC.Score'] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
+        all_positive = all_putative.iloc[np.logical_and.reduce((all_putative.TargetGeneIsExpressed, all_putative[args.score_column] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
 
     all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.6f")
+    all_positive[slim_cols].to_csv(pred_file_slim, sep="\t", index=False, header=True, float_format="%.6f")
 
     if args.make_all_putative:
-        all_putative.to_csv(all_pred_file, sep="\t", index=False, header=True, compression="gzip", float_format="%.6f", na_rep="NaN")
+        all_putative.loc[all_putative.TargetGeneIsExpressed,:].to_csv(all_pred_file_expressed, sep="\t", index=False, header=True, compression="gzip", float_format="%.6f", na_rep="NaN") #,
+        all_putative.loc[~all_putative.TargetGeneIsExpressed,:].to_csv(all_pred_file_nonexpressed, sep="\t", index=False, header=True, compression="gzip", float_format="%.6f", na_rep="NaN")
         
         #TO DO
         #use hdf5 format?
@@ -125,81 +135,6 @@ def main():
     write_connections_bedpe_format(all_positive, pred_file_bedpe, args.score_column)
     print("Done.")
     
-def write_prediction_params(args, file):
-    with open(file, 'w') as outfile:
-        for arg in vars(args):
-            outfile.write("--" + arg + " " + str(getattr(args, arg)) + " ")
-
-
 if __name__ == '__main__':
     main()
     
-    # for idx, gene in genes.iterrows():
-    #     if gene.chr == 'chrY' and not args.include_chrY:
-    #         continue
-    #     if gene.chr not in chromosomes:
-    #         print("\nNo data for {}".format(gene.chr))
-    #         continue
-    #     print("\nPredicting {} with TSS {} {}".format(gene["name"], gene["chr"], gene["tss"]))
-
-    #     try:
-    #         nearby_enhancers = enhancers.within_range(gene.chr, gene.tss - args.window, gene.tss + args.window)
-    #         predictor.predict_from_normalized_to_enhancers(nearby_enhancers, gene, args.window, tss_slop=args.tss_slop)
-            
-    #         col_names = ['chr','start','end','class','TargetGene','TargetGeneTSS','ABC.Score','powerlaw.Score','distance','hic.distance','hic.distance.adj','estimatedCP','estimatedCP.adj','normalized_dhs','normalized_atac','activity_base','normalized_h3K27ac','TargetGeneExpression','TargetGenePromoterActivityQuantile']
-    #         col_names = [col for col in col_names if col in nearby_enhancers.columns]
-    #         #col_names = list(set(nearby_enhancers.columns) & set(col_names))
-
-    #         if not args.skip_gene_files:
-    #             if not args.skinny_gene_files:
-    #                 write_scores(preddir, gene, nearby_enhancers)
-    #             else:
-    #                 write_scores(preddir, gene, nearby_enhancers[col_names])
-
-    #         if args.make_all_putative:
-    #             if args.skinny_gene_files:
-    #                 all_putative_list.append(nearby_enhancers[col_names])
-    #             else:
-    #                 all_putative_list.append(nearby_enhancers)
-            
-    #         gene_is_expressed_proxy = check_gene_for_runnability(gene, args.expression_cutoff, args.promoter_activity_quantile_cutoff)
-    #         if args.run_all_genes or gene_is_expressed_proxy:
-    #             positives = nearby_enhancers.ix[np.logical_and(nearby_enhancers[args.score_column] >= args.threshold, nearby_enhancers["class"] != "promoter"),:]
-    #             print("{} enhancers predicted for {}".format(positives.shape[0], gene["name"]))
-    #             all_positive_list.append(positives)
-
-    #         #Consider a gene as failed if all its ABC Scores are nan
-    #         if all(nearby_enhancers[args.score_column].isnull().tolist()):
-    #             failed_genes.append(gene["chr"] + "\t" + gene["name"])
-
-    #         #Add gene to gene summary file
-    #         if nearby_enhancers.shape[0] > 0:
-    #             stats = predictor.get_gene_prediction_stats(args, nearby_enhancers)
-    #             stats['prediction_file'] = get_score_filename(gene)
-    #             stats['gene_is_expressed_proxy'] = gene_is_expressed_proxy
-    #             gene_stats.append(stats)
-
-    #     except:
-    #         failed_genes.append(gene["chr"] + "\t" + gene["name"])
-    #         print("Failed on " + gene["name"] + " ... skipping. Traceback:")
-    #         traceback.print_exc(file=sys.stdout)
-    #         continue
-
-    # if args.score_column is not None:
-    #     all_positive = pd.concat(all_positive_list)
-    #     all_positive.to_csv(pred_file_full, sep="\t", index=False, header=True, float_format="%.4f")
-    #     all_positive[['chr','start','end','TargetGene','TargetGeneTSS','ABC.Score']].to_csv(pred_file, sep="\t", index=False, header=True, float_format="%.4f")
-    #     write_connections_bedpe_format(all_positive, outfile=os.path.join(args.outdir, "EnhancerPredictions.bedpe"), score_column=args.score_column)
-
-    # gene_stats = pd.concat(gene_stats, axis=1).T
-    # gene_stats.to_csv(os.path.join(args.outdir, "GenePredictionStats.txt"), sep="\t", index=False)
-
-    # with open(os.path.join(args.outdir, "FailedGenes.txt"), 'w') as failed_file:
-    #     for gene in failed_genes:
-    #         failed_file.write(gene + "\n")
-
-    # if args.make_all_putative:
-    #     all_putative = pd.concat(all_putative_list)
-    #     all_putative.to_csv(all_pred_file, sep="\t", index=False, header=True, compression="gzip", float_format="%.4f", na_rep="NaN", chunksize=100000)
-
-

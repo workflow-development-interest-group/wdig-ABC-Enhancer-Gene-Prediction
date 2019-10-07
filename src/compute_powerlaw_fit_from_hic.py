@@ -45,7 +45,7 @@ def main():
     res = pandas.DataFrame({'resolution' : [args.resolution], 'maxWindow' : [args.maxWindow], 'minWindow' : [args.minWindow] ,'pl_gamma' : [slope], 'pl_scale' : [intercept] })
     res.to_csv(os.path.join(args.outDir, 'hic.powerlaw.txt'), sep='\t', index=False, header=True)
 
-    hic_mean_var.to_csv(os.path.join(args.outDir, 'hic.mean_var.txt'), sep='\t', index=False, header=True)
+    hic_mean_var.to_csv(os.path.join(args.outDir, 'hic.mean_var.txt'), sep='\t', index=True, header=True)
 
 def load_hic_juicebox(args):
     file_list = glob.glob(os.path.join(args.hicDir,'chr*/chr*.KRobserved'))
