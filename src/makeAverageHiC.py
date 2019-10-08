@@ -40,8 +40,12 @@ def main():
     for chromosome in chromosomes:
         hic_list = [process_chr(cell_type, chromosome, args.basedir, args.resolution, args.ref_scale, args.ref_gamma) for cell_type in cell_types]
 
+        import pdb
+        pdb.set_trace()
+
         #Make average
-        #TO DO: Enforce minimum number of cell types required for averaging
+        #TO DO: Enforce minimum number of cell types required for averaging.
+        #TO DO: Deal with nan vs 0 here
         all_hic = reduce(lambda x, y: pd.merge(x, y, on = ['bin1', 'bin2'], how = 'outer'), hic_list)
         all_hic.fillna(value=0, inplace=True)
         cols_for_avg = list(filter(lambda x:'hic_kr_' in x, all_hic.columns))
@@ -74,18 +78,22 @@ def process_chr(cell_type, chromosome, basedir, resolution, scale_ref, gamma_ref
     # pdb.set_trace()
 
     hic_file = os.path.join(basedir, cell_type, "5kb_resolution_intra", chromosome, chromosome + ".KRobserved")
+    hic_norm_file = os.path.join(basedir, cell_type, "5kb_resolution_intra", chromosome, chromosome + ".KRnorm")
 
     #Load gamma and scale
     pl_summary = pd.read_csv(os.path.join(basedir, cell_type, "5kb_resolution_intra/powerlaw/hic.powerlaw.txt"), sep="\t")
 
     #Read in and normalize to make DS
-    hic = load_hic(hic_file, 
+    hic = load_hic(hic_file = hic_file, 
+                    hic_norm_file = hic_norm_file,
+                    hic_is_vc=False,
                     hic_type="juicebox", 
                     hic_resolution = resolution, 
                     tss_hic_contribution=np.NaN, 
                     window = np.Inf, 
                     min_window=0, 
                     gamma = -1*pl_summary['pl_gamma'].values[0],
+                    interpolate_nan=False, 
                     apply_diagonal_bin_correction=False)
 
     #power law scale 

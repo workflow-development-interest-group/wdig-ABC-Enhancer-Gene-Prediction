@@ -85,6 +85,8 @@ def processCellType(args):
                     class_override_file = args.enhancer_class_override,
                     outdir = args.outdir)
 
+    print('Neighborhoods Complete! \n')
+
 def main(args):
     processCellType(args)
 

@@ -74,6 +74,8 @@ def main():
        
     print("reading enhancers")
     enhancers_full = pd.read_csv(args.enhancers, sep = "\t")
+    #TO DO
+    #Think about which columns to include
     enhancers = enhancers_full.loc[:,['chr','start','end','name','class','activity_base']]
 
     #Initialize Prediction files

@@ -4,12 +4,13 @@ from scipy import interpolate
 import os
 import os.path
 from subprocess import check_call, check_output, PIPE, Popen, getoutput, CalledProcessError
-from intervaltree import IntervalTree
+#from intervaltree import IntervalTree
 # import pysam
 from tools import *
 import linecache
 import traceback
 import time
+import pyranges as pr
 
 pd.options.display.max_colwidth = 10000 #seems to be necessary for pandas to read long file names... strange
 
@@ -87,7 +88,8 @@ def annotate_genes_with_features(genes,
     #tss1kb_file = file + '.TSS1kb.bed'
 
     #Make bed file with TSS +/- 500bp
-    tss1kb = genes.ix[:,['chr','start','end','name','score','strand']]
+    #tss1kb = genes.ix[:,['chr','start','end','name','score','strand']]
+    tss1kb = genes.loc[:,['chr','start','end','name','score','strand']]
     tss1kb['start'] = genes['tss'] - 500
     tss1kb['end'] = genes['tss'] + 500
     tss1kb_file = os.path.join(outdir, "GeneList.TSS1kb.bed")
@@ -150,7 +152,8 @@ def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None, fail_on_nonuni
 def get_tss_for_bed(bed):
     assert_bed3(bed)
     tss = bed['start'].copy()
-    tss.ix[bed.loc[:,'strand'] == "-"] = bed.ix[bed.loc[:,'strand'] == "-",'end']
+    tss.loc[bed.loc[:,'strand'] == "-"] = bed.loc[bed.loc[:,'strand'] == "-",'end']
+
     return tss
 
 def assert_bed3(df):
@@ -158,6 +161,7 @@ def assert_bed3(df):
     assert('chr' in df.columns)
     assert('start' in df.columns)
     assert('end' in df.columns)
+    assert('strand' in df.columns)
 
 def load_enhancers(outdir=".",
                    genome_sizes="",
@@ -174,7 +178,7 @@ def load_enhancers(outdir=".",
                    class_override_file = None):
 
     enhancers = read_bed(candidate_peaks)
-    enhancers = enhancers.ix[~ (enhancers.chr.str.contains(re.compile('random|chrM|_|hap|Un')))]
+    enhancers = enhancers.loc[~ (enhancers.chr.str.contains(re.compile('random|chrM|_|hap|Un')))]
 
     enhancers = count_features_for_bed(enhancers, candidate_peaks, genome_sizes, features, outdir, "Enhancers", skip_rpkm_quantile, force, use_fast_count)
 
@@ -185,13 +189,7 @@ def load_enhancers(outdir=".",
     # Assign categories
     if genes is not None:
         print("Assigning classes to enhancers")
-        enhancers = assign_enhancer_classes(enhancers, genes, tss_slop = tss_slop_for_class_assignment, class_override_file = class_override_file, cellType = cellType)
-
-        # Output stats
-        print("Total enhancers: {}".format(len(enhancers)))
-        print("         Promoters: {}".format(sum(enhancers['isPromoterElement'])))
-        print("         Genic: {}".format(sum(enhancers['isGenicElement'])))
-        print("         Intergenic: {}".format(sum(enhancers['isIntergenicElement'])))
+        enhancers = assign_enhancer_classes(enhancers, genes, tss_slop = tss_slop_for_class_assignment)
 
     #TO DO: Should qnorm each bam file separately (before averaging). Currently qnorm being performed on the average
     enhancers = run_qnorm(enhancers, qnorm)
@@ -202,46 +200,118 @@ def load_enhancers(outdir=".",
     enhancers[['chr', 'start', 'end', 'name']].to_csv(os.path.join(outdir, "EnhancerList.bed"),
                 sep='\t', index=False, header=False)
 
-def assign_enhancer_classes(enhancers, genes, tss_slop=500, class_override_file=None, cellType=None):
-    # TO DO: use pyranges
+#Kristy's version
+def assign_enhancer_classes(enhancers, genes, tss_slop=500):
+
+    # build pyranges df 
+    # tss_pyranges = pr.PyRanges(chromosomes=genes['chr'], starts=genes['tss'] - tss_slop, ends=genes['tss'] + tss_slop)
+    # gene_pyranges = pr.PyRanges(chromosomes= genes['chr'], starts=genes['start'], ends=genes['end'])
+    tss_pyranges = df_to_pyranges(genes, start_col='tss', end_col='tss', start_slop=tss_slop, end_slop=tss_slop)
+    gene_pyranges = df_to_pyranges(genes)
+
+    # def grab_symbol(overlaps):
+    #     overlap = overlaps.df
+    #     x = ",".join((str(overlap[i]) for i in overlap.columns))
+    #     return x
+    # def get_tss_symbol(enhancer, tss_pyranges = tss_pyranges):
+    #    #For candidate regions that overlap gene promoters, annotate enhancers data table with the name of the gene.
+    #    if enhancer["class"] == "promoter":
+    #        start, end = sorted((enhancer.start, enhancer.end))
+    #        overlaps = tss_pyranges[enhancer.chr][start:end]
+    #        return grab_symbol(overlaps)
+    #    return ""
+
+    def get_class_pyranges(enhancers, tss_pyranges = tss_pyranges, gene_pyranges = gene_pyranges): 
+        '''
+        Takes in PyRanges objects : Enhancers, tss_pyranges, gene_pyranges
+        Returns numpy arrays representing cluster id for enhancers labelled genes/promoters'''
+        genic_enh = enhancers.join(gene_pyranges, suffix="_genic")
+        
+        #for promoters want the symbol as well
+        promoter_enh = enhancers.join(tss_pyranges, suffix="_promoter")
+        promoter_enh = promoter_enh.df[['symbol','Cluster']].groupby('Cluster',as_index=False).aggregate(lambda x: ','.join(list(x)))
+        
+        genes = np.array(genic_enh.Cluster)
+        #promoters = np.array(promoter_enh.Cluster)
+        return genes, promoter_enh
+
+    # label everything as intergenic
+    enhancers["class"] = "intergenic"
+    #enhancer = pr.PyRanges(enhancers.rename(columns={'chr':'Chromosome', 'start':'Start', 'end':'End'}))
+    enh = df_to_pyranges(enhancers).cluster()
+    # use clustering as unique identifier for each enhancer region
+    # enh = enhancer.cluster()  
+    genes, promoters = get_class_pyranges(enh)
+    #enhancers = enh.df.rename(columns={'Chromosome':'chr', 'Start':'start', 'End':'end'})
+    enhancers = enh.df.drop(['Chromosome','Start','End'], axis=1)
+    enhancers.loc[enhancers['Cluster'].isin(genes), 'class'] = 'genic'
+    enhancers.loc[enhancers['Cluster'].isin(promoters.Cluster), 'class'] = 'promoter' 
     
-    # build interval trees
-    tss_intervals = {}
-    gene_intervals = {}
-    for chr, chrdata in genes.groupby('chr'):
-        tss_intervals[chr] = IntervalTree.from_tuples(zip(chrdata.tss - tss_slop, chrdata.tss + tss_slop,
-                                                          [str(x) for x in chrdata.symbol]))
-        gene_intervals[chr] = IntervalTree.from_tuples(zip(chrdata.start, chrdata.end))
-
-    def get_class(enhancer):
-        start, end = sorted((enhancer.start, enhancer.end))
-        if tss_intervals[enhancer.chr][start:end]:
-            return "promoter"
-        if gene_intervals[enhancer.chr][start:end]:
-            return "genic"
-        return "intergenic"
-
-    def get_tss_symbol(enhancer):
-        #For candidate regions that overlap gene promoters, annotate enhancers data table with the name of the gene.
-        if enhancer["class"] == "promoter":
-            start, end = sorted((enhancer.start, enhancer.end))
-            overlaps = tss_intervals[enhancer.chr][start:end]
-            return ",".join(list(set([o[2] for o in overlaps])))
-        return ""
-
-    enhancers["class"] = enhancers.apply(get_class, axis=1)
     enhancers["isPromoterElement"] = enhancers["class"] == "promoter"
     enhancers["isGenicElement"] = enhancers["class"] == "genic"
     enhancers["isIntergenicElement"] = enhancers["class"] == "intergenic"
-    enhancers["enhancerSymbol"] = enhancers.apply(get_tss_symbol, axis=1)
-    assert (enhancers.enhancerSymbol == "\n").sum() == 0
+  
+    # Output stats
+    print("Total enhancers: {}".format(len(enhancers)))
+    print("         Promoters: {}".format(sum(enhancers['isPromoterElement'])))
+    print("         Genic: {}".format(sum(enhancers['isGenicElement'])))
+    print("         Intergenic: {}".format(sum(enhancers['isIntergenicElement'])))
+
+    # import pdb
+    # pdb.set_trace()
+
+    #Add enhancer symbol
+    enhancers = enhancers.merge(promoters.rename(columns={'symbol':'enhancerSymbol'}), on='Cluster', how = 'left').fillna(value={'enhancerSymbol':""})
+    enhancers.drop(['Cluster'], axis=1, inplace=True)
+
+    #enhancers["enhancerSymbol"] = enhancers.apply(get_tss_symbol, axis=1)
+    #assert (enhancers.enhancerSymbol == "\n").sum() == 0
+
+    # just to keep things consistent with original code 
     enhancers["name"] = enhancers.apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
+    return enhancers
 
-    if class_override_file is not None:
-        enhancers = overrideEnhancerAnnotations(enhancers, cellType, class_override_file)
+# def assign_enhancer_classes(enhancers, genes, tss_slop=500, class_override_file=None, cellType=None):
+#     # TO DO: use pyranges
+    
+#     # build interval trees
+#     tss_intervals = {}
+#     gene_intervals = {}
+#     for chr, chrdata in genes.groupby('chr'):
+#         tss_intervals[chr] = IntervalTree.from_tuples(zip(chrdata.tss - tss_slop, chrdata.tss + tss_slop,
+#                                                           [str(x) for x in chrdata.symbol]))
+#         gene_intervals[chr] = IntervalTree.from_tuples(zip(chrdata.start, chrdata.end))
 
-    return(enhancers)
+#     def get_class(enhancer):
+#         start, end = sorted((enhancer.start, enhancer.end))
+#         if tss_intervals[enhancer.chr][start:end]:
+#             return "promoter"
+#         if gene_intervals[enhancer.chr][start:end]:
+#             return "genic"
+#         return "intergenic"
 
+#     def get_tss_symbol(enhancer):
+#         #For candidate regions that overlap gene promoters, annotate enhancers data table with the name of the gene.
+#         if enhancer["class"] == "promoter":
+#             start, end = sorted((enhancer.start, enhancer.end))
+#             overlaps = tss_intervals[enhancer.chr][start:end]
+#             return ",".join(list(set([o[2] for o in overlaps])))
+#         return ""
+
+#     enhancers["class"] = enhancers.apply(get_class, axis=1)
+#     enhancers["isPromoterElement"] = enhancers["class"] == "promoter"
+#     enhancers["isGenicElement"] = enhancers["class"] == "genic"
+#     enhancers["isIntergenicElement"] = enhancers["class"] == "intergenic"
+#     enhancers["enhancerSymbol"] = enhancers.apply(get_tss_symbol, axis=1)
+#     assert (enhancers.enhancerSymbol == "\n").sum() == 0
+#     enhancers["name"] = enhancers.apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
+
+#     if class_override_file is not None:
+#         enhancers = overrideEnhancerAnnotations(enhancers, cellType, class_override_file)
+
+#     return(enhancers)
+
+#TO DO: convert to pyranges
 def overrideEnhancerAnnotations(enhancers, cell_line, override_file):
     #Override enhancer class with manual annotations
 
@@ -280,7 +350,7 @@ def run_count_reads(target, output, bed_file, genome_sizes, use_fast_count):
         raise ValueError("File {} name was not in .bam, .tagAlign.gz, .bw".format(target))
 
 
-def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verbose=True):
+def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verbose=False):
     completed = True
         
     #Fast count:
@@ -309,7 +379,7 @@ def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verb
         err = str(stderrdata, 'utf-8')
 
         try:
-            data = pd.read_table(output, header=None).ix[:,3].values
+            data = pd.read_table(output, header=None).loc[:,3].values
         except Exception as e:
             print("Fast count method failed to count: " + str(bamfile) + "\n")
             print(err)
@@ -328,7 +398,7 @@ def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verb
         (stdoutdata, stderrdata) = p.communicate()
 
         try:
-            data = pd.read_table(output, header=None).ix[:,3].values
+            data = pd.read_table(output, header=None).loc[:,3].values
         except Exception as e:
             print(e)
             print(stderrdata)

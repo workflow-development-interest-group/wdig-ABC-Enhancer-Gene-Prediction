@@ -5,7 +5,7 @@ window 5000000
 score_column ABC.Score
 threshold 0.022
 cellType K562
-HiCdir example_chr22/input_data/HiC/bedgraph/
+HiCdir example_chr22/input_data/HiC/raw/
 hic_resolution 5000
 tss_hic_contribution 100
 hic_pseudocount_distance 1000000.0

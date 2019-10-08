@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.sparse as ssp
 import pandas as pd
-import time
+import time, os
 
 def load_hic(hic_file, hic_norm_file, hic_is_vc, hic_type, hic_resolution, tss_hic_contribution, window, min_window, gamma, interpolate_nan=True, apply_diagonal_bin_correction=True):
     print("Loading HiC")

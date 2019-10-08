@@ -8,6 +8,7 @@ import pandas as pd
 import re
 from subprocess import check_call
 import sys
+import pyranges as pr
 
 # setting this to raise makes sure that any dangerous assignments to pandas
 # dataframe slices/subsets error rather than warn
@@ -46,101 +47,105 @@ def determine_expressed_genes(genes, expression_cutoff, activity_quantile_cutoff
 
     return(genes)
 
-
-def read_genes(filename):
-    genes = pandas.read_table(filename)
-
-    #Deduplicate genes.
-    gene_cols = ['chr','tss','name','Expression','PromoterActivityQuantile']
-    genes = genes[gene_cols]
-    genes.drop_duplicates(inplace=True)
-
-    return genes
-
-def get_gene_name(gene):
-    try:
-        out_name = gene['name'] #if ('symbol' not in gene.keys() or gene.isnull().symbol) else gene['symbol']
-    except:
-        out_name = "_UNK"
-    return str(out_name)
-
-def get_score_filename(gene, outdir = None):
-    out_name = get_gene_name(gene)
-    outfile = "{}_{}_{}.prediction.txt.gz".format(out_name, gene.chr, int(gene.tss))
-    if outdir is not None:
-        outfile = os.path.join(outdir, outfile)
-    return outfile
-
-
-def write_scores(outdir, gene, enhancers):
-    outfile = get_score_filename(gene)
-    enhancers.to_csv(os.path.join(outdir, outfile), sep="\t", index=False, compression="gzip", float_format="%.6f", na_rep="NaN")
-
-class GenomicRangesIntervalTree(object):
-    def __init__(self, filename, slop=0, isBed=False):
-        if isBed:
-            self.ranges = pandas.read_table(filename, header=None, names=['chr', 'start', 'end', 'Score'])
-        elif isinstance(filename, pandas.DataFrame):
-            self.ranges = filename
-        else:
-            self.ranges = pandas.read_table(filename)
-
-        self.ranges['start'] = self.ranges['start'] - slop
-        self.ranges['end'] = self.ranges['end'] + slop
-        self.ranges['end'] = [ max(x,y) for x,y in zip(self.ranges['start']+1,self.ranges['end']) ]
-        assert(pandas.DataFrame.all(self.ranges.start <= self.ranges.end))
-        
-        self.intervals = {}
-        for chr, chrdata in self.ranges.groupby('chr'):
-            self.intervals[chr] = IntervalTree.from_tuples(zip(chrdata.start,
-                                                               chrdata.end,
-                                                               chrdata.index))
-
-    def within_range(self, chr, start, end):
-        # Returns empty data frame (0 rows) if there is no overlap
-        if start == end:   ## Interval search doesn't like having start and end equal
-            end = end + 1
-        result = self.ranges.iloc[[], :].copy()
-        if chr in self.intervals:
-            overlaps = self.intervals[chr][start:end]
-            indices = [idx for l, h, idx in overlaps]
-            result = self.ranges.iloc[indices, :].copy()
-        return result
-
-    def overlaps(self, chr, start, end):
-        locs = self.intervals[chr].overlaps()
-
-    def __getitem__(self, idx):
-        return self.ranges[idx]
-
-def read_enhancers(filename):
-    return GenomicRangesIntervalTree(filename)
-
-class DataCache(object):
-    def __init__(self, directory):
-        os.makedirs(directory, exist_ok=True)
-        self.directory = directory
-
-    def __contains__(self, filename):
-        cache_name = os.path.join(self.directory, filename.replace(os.sep, '__'))
-        if os.path.exists(cache_name) and (os.path.getctime(cache_name) > os.path.getctime(filename)):
-            return True
-        return False
-
-    def __getitem__(self, filename):
-        cache_name = os.path.join(self.directory, filename.replace(os.sep, '__'))
-        if os.path.exists(cache_name) and (os.path.getctime(cache_name) > os.path.getctime(filename)):
-            with open(cache_name, "rb") as f:
-                return pickle.load(f)
-        raise KeyError
-
-    def __setitem__(self, filename, value):
-        cache_name = os.path.join(self.directory, filename.replace(os.sep, '__'))
-        with open(cache_name, "wb") as f:
-            pickle.dump(value, f, protocol=pickle.HIGHEST_PROTOCOL)
-
 def write_params(args, file):
     with open(file, 'w') as outfile:
         for arg in vars(args):
             outfile.write(arg + " " + str(getattr(args, arg)) + "\n")
 
+def df_to_pyranges(df, start_col='start', end_col='end', chr_col='chr', start_slop=0, end_slop=0):
+    df['Chromosome'] = df[chr_col]
+    df['Start'] = df[start_col] - start_slop
+    df['End'] = df[end_col] + end_slop
+
+    return(pr.PyRanges(df))
+
+# def write_scores(outdir, gene, enhancers):
+#     outfile = get_score_filename(gene)
+#     enhancers.to_csv(os.path.join(outdir, outfile), sep="\t", index=False, compression="gzip", float_format="%.6f", na_rep="NaN")
+
+# def read_genes(filename):
+#     genes = pandas.read_table(filename)
+
+#     #Deduplicate genes.
+#     gene_cols = ['chr','tss','name','Expression','PromoterActivityQuantile']
+#     genes = genes[gene_cols]
+#     genes.drop_duplicates(inplace=True)
+
+#     return genes
+    
+# def get_score_filename(gene, outdir = None):
+#     out_name = get_gene_name(gene)
+#     outfile = "{}_{}_{}.prediction.txt.gz".format(out_name, gene.chr, int(gene.tss))
+#     if outdir is not None:
+#         outfile = os.path.join(outdir, outfile)
+#     return outfile
+
+# def get_gene_name(gene):
+#     try:
+#         out_name = gene['name'] #if ('symbol' not in gene.keys() or gene.isnull().symbol) else gene['symbol']
+#     except:
+#         out_name = "_UNK"
+#     return str(out_name)
+
+# class GenomicRangesIntervalTree(object):
+#     def __init__(self, filename, slop=0, isBed=False):
+#         if isBed:
+#             self.ranges = pandas.read_table(filename, header=None, names=['chr', 'start', 'end', 'Score'])
+#         elif isinstance(filename, pandas.DataFrame):
+#             self.ranges = filename
+#         else:
+#             self.ranges = pandas.read_table(filename)
+
+#         self.ranges['start'] = self.ranges['start'] - slop
+#         self.ranges['end'] = self.ranges['end'] + slop
+#         self.ranges['end'] = [ max(x,y) for x,y in zip(self.ranges['start']+1,self.ranges['end']) ]
+#         assert(pandas.DataFrame.all(self.ranges.start <= self.ranges.end))
+        
+#         self.intervals = {}
+#         for chr, chrdata in self.ranges.groupby('chr'):
+#             self.intervals[chr] = IntervalTree.from_tuples(zip(chrdata.start,
+#                                                                chrdata.end,
+#                                                                chrdata.index))
+
+#     def within_range(self, chr, start, end):
+#         # Returns empty data frame (0 rows) if there is no overlap
+#         if start == end:   ## Interval search doesn't like having start and end equal
+#             end = end + 1
+#         result = self.ranges.iloc[[], :].copy()
+#         if chr in self.intervals:
+#             overlaps = self.intervals[chr][start:end]
+#             indices = [idx for l, h, idx in overlaps]
+#             result = self.ranges.iloc[indices, :].copy()
+#         return result
+
+#     def overlaps(self, chr, start, end):
+#         locs = self.intervals[chr].overlaps()
+
+#     def __getitem__(self, idx):
+#         return self.ranges[idx]
+
+# def read_enhancers(filename):
+#     return GenomicRangesIntervalTree(filename)
+
+# class DataCache(object):
+#     def __init__(self, directory):
+#         os.makedirs(directory, exist_ok=True)
+#         self.directory = directory
+
+#     def __contains__(self, filename):
+#         cache_name = os.path.join(self.directory, filename.replace(os.sep, '__'))
+#         if os.path.exists(cache_name) and (os.path.getctime(cache_name) > os.path.getctime(filename)):
+#             return True
+#         return False
+
+#     def __getitem__(self, filename):
+#         cache_name = os.path.join(self.directory, filename.replace(os.sep, '__'))
+#         if os.path.exists(cache_name) and (os.path.getctime(cache_name) > os.path.getctime(filename)):
+#             with open(cache_name, "rb") as f:
+#                 return pickle.load(f)
+#         raise KeyError
+
+#     def __setitem__(self, filename, value):
+#         cache_name = os.path.join(self.directory, filename.replace(os.sep, '__'))
+#         with open(cache_name, "wb") as f:
+#             pickle.dump(value, f, protocol=pickle.HIGHEST_PROTOCOL)

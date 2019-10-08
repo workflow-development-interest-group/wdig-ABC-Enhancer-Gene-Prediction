@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from tools import get_gene_name
+from tools import *
 import sys, os
 import time
 import pyranges as pr
@@ -50,13 +50,6 @@ def make_pred_table(chromosome, enh, genes, args):
     #     print('Elapsed time: {}'.format(time.time() - t))
 
     return pred
-    
-def df_to_pyranges(df, start_col='start', end_col='end', chr_col='chr', start_slop=0, end_slop=0):
-    df['Chromosome'] = df[chr_col]
-    df['Start'] = df[start_col] - start_slop
-    df['End'] = df[end_col] + end_slop
-
-    return(pr.PyRanges(df))
 
 def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, hic_norm_file, hic_is_vc, chromosome, args):
     print('Begin HiC')
@@ -177,7 +170,7 @@ def compute_score(enhancers, product_terms, prefix):
 
 def annotate_predictions(pred, tss_slop=500):
     #TO DO: Add is self genic
-    pred['isSelfPromoter'] = np.logical_and.reduce((enhancers.isPromoterElement, pred.start - tss_slop < pred.TargetGeneTSS, enhancers.end + tss_slop > pred.TargetGeneTSS))
+    pred['isSelfPromoter'] = np.logical_and.reduce((pred['class'] == 'promoter' , pred.start - tss_slop < pred.TargetGeneTSS, pred.end + tss_slop > pred.TargetGeneTSS))
 
     return(pred)
 
