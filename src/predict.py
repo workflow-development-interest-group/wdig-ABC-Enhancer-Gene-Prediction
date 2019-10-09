@@ -61,6 +61,8 @@ def main():
     parser = get_predict_argument_parser()
     args = parser.parse_args()
 
+    validate_args(args)
+
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
 
@@ -130,6 +132,10 @@ def main():
             
     print("Done.")
     
+def validate_args(args):
+    if args.hic_type == 'juicebox':
+        assert args.hic_resolution is not None, 'HiC resolution must be provided if hic_type is juicebox'
+
 if __name__ == '__main__':
     main()
     

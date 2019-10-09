@@ -224,16 +224,19 @@ def assign_enhancer_classes(enhancers, genes, tss_slop=500):
     def get_class_pyranges(enhancers, tss_pyranges = tss_pyranges, gene_pyranges = gene_pyranges): 
         '''
         Takes in PyRanges objects : Enhancers, tss_pyranges, gene_pyranges
-        Returns numpy arrays representing cluster id for enhancers labelled genes/promoters'''
+        Returns dataframe with cluster id (representing enhancer) and symbol of the gene/promoter that is overlapped'''
+
+        #genes
         genic_enh = enhancers.join(gene_pyranges, suffix="_genic")
+        genic_enh = genic_enh.df[['symbol','Cluster']].groupby('Cluster',as_index=False).aggregate(lambda x: ','.join(list(set(x))))
         
-        #for promoters want the symbol as well
+        #promoters
         promoter_enh = enhancers.join(tss_pyranges, suffix="_promoter")
-        promoter_enh = promoter_enh.df[['symbol','Cluster']].groupby('Cluster',as_index=False).aggregate(lambda x: ','.join(list(x)))
+        promoter_enh = promoter_enh.df[['symbol','Cluster']].groupby('Cluster',as_index=False).aggregate(lambda x: ','.join(list(set(x))))
         
-        genes = np.array(genic_enh.Cluster)
+        #genes = np.array(genic_enh.Cluster)
         #promoters = np.array(promoter_enh.Cluster)
-        return genes, promoter_enh
+        return genic_enh, promoter_enh
 
     # label everything as intergenic
     enhancers["class"] = "intergenic"
@@ -244,7 +247,7 @@ def assign_enhancer_classes(enhancers, genes, tss_slop=500):
     genes, promoters = get_class_pyranges(enh)
     #enhancers = enh.df.rename(columns={'Chromosome':'chr', 'Start':'start', 'End':'end'})
     enhancers = enh.df.drop(['Chromosome','Start','End'], axis=1)
-    enhancers.loc[enhancers['Cluster'].isin(genes), 'class'] = 'genic'
+    enhancers.loc[enhancers['Cluster'].isin(genes.Cluster), 'class'] = 'genic'
     enhancers.loc[enhancers['Cluster'].isin(promoters.Cluster), 'class'] = 'promoter' 
     
     enhancers["isPromoterElement"] = enhancers["class"] == "promoter"
@@ -260,8 +263,9 @@ def assign_enhancer_classes(enhancers, genes, tss_slop=500):
     # import pdb
     # pdb.set_trace()
 
-    #Add enhancer symbol
-    enhancers = enhancers.merge(promoters.rename(columns={'symbol':'enhancerSymbol'}), on='Cluster', how = 'left').fillna(value={'enhancerSymbol':""})
+    #Add promoter/genic symbol
+    enhancers = enhancers.merge(promoters.rename(columns={'symbol':'promoterSymbol'}), on='Cluster', how = 'left').fillna(value={'promoterSymbol':""})
+    enhancers = enhancers.merge(genes.rename(columns={'symbol':'genicSymbol'}), on='Cluster', how = 'left').fillna(value={'genicSymbol':""})
     enhancers.drop(['Cluster'], axis=1, inplace=True)
 
     #enhancers["enhancerSymbol"] = enhancers.apply(get_tss_symbol, axis=1)
@@ -350,7 +354,7 @@ def run_count_reads(target, output, bed_file, genome_sizes, use_fast_count):
         raise ValueError("File {} name was not in .bam, .tagAlign.gz, .bw".format(target))
 
 
-def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verbose=False):
+def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verbose=True):
     completed = True
         
     #Fast count:
@@ -365,7 +369,7 @@ def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verb
     if use_fast_count:
         temp_output = output + ".temp_sort_order"
         faidx_command = "awk 'FNR==NR {{x2[$1] = $0; next}} $1 in x2 {{print x2[$1]}}' {genome_sizes} <(samtools view -H {bamfile} | grep SQ | cut -f 2 | cut -c 4- )  > {temp_output}".format(**locals())
-        command = "bedtools sort -faidx {temp_output} -i {bed_file} | bedtools coverage -g {temp_output} -counts -sorted -a stdin -b {bamfile} | awk '{{print $1 \"\\t\" $2 \"\\t\" $3 \"\\t\" $NF}}'  | bedtools sort -faidx {genome_sizes} -i stdin > {output}; rm {temp_output}".format(**locals()) #
+        command = "bedtools sort -faidx {temp_output} -i {bed_file} | bedtools coverage -g {temp_output} -counts -sorted -a stdin -b {bamfile} | awk '{{print $1 \"\\t\" $2 \"\\t\" $3 \"\\t\" $NF}}'  | bedtools sort -faidx {genome_sizes} -i stdin > {output}".format(**locals()) #; rm {temp_output}
 
         #executable='/bin/bash' needed to parse < redirect in faidx_command
         p = Popen(faidx_command, stdout=PIPE, stderr=PIPE, shell=True, executable='/bin/bash')

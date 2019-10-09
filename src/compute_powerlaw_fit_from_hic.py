@@ -9,6 +9,7 @@ from hic import *
 
 #To do: 
 #1. Use MLE to estimate exponent?
+#2. Support bedpe
 
 def parseargs():
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
@@ -48,13 +49,17 @@ def main():
     hic_mean_var.to_csv(os.path.join(args.outDir, 'hic.mean_var.txt'), sep='\t', index=True, header=True)
 
 def load_hic_juicebox(args):
-    file_list = glob.glob(os.path.join(args.hicDir,'chr*/chr*.KRobserved'))
+    chromosomes = ['chr' + str(x) for x in  list(range(1,23))] + ['chrX']
+    #file_list = glob.glob(os.path.join(args.hicDir,'chr*/chr*.KRobserved'))
 
     all_data_list = []
-    for this_file in file_list:
+    for chrom in chromosomes:
         try:
-            print("Working on {}".format(this_file))
-            this_data = load_hic(hic_file = this_file, 
+            hic_file, hic_norm_file, hic_is_vc = get_hic_file(chrom, args.hicDir, allow_vc=False)
+            print("Working on {}".format(hic_file))
+            this_data = load_hic(hic_file = hic_file, 
+                hic_norm_file = hic_norm_file,
+                hic_is_vc = hic_is_vc, 
                 hic_type = 'juicebox', 
                 hic_resolution = args.resolution, 
                 tss_hic_contribution = 100, 
