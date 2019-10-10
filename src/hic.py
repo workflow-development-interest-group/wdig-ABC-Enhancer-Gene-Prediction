@@ -49,7 +49,7 @@ def load_hic(hic_file, hic_norm_file, hic_is_vc, hic_type, hic_resolution, tss_h
 
 #     return(hic)
 
-def process_hic(hic_mat, hic_norm_file, hic_is_vc, resolution, tss_hic_contribution, window, min_window=0, hic_is_doubly_stochastic=False, apply_diagonal_bin_correction=True, interpolate_nan=True, gamma=None, kr_cutoff = .1):
+def process_hic(hic_mat, hic_norm_file, hic_is_vc, resolution, tss_hic_contribution, window, min_window=0, hic_is_doubly_stochastic=False, apply_diagonal_bin_correction=True, interpolate_nan=True, gamma=None, kr_cutoff = .25):
     #Make doubly stochastic.
     #Juicer produces a matrix with constant row/column sums. But sum is not 1 and is variable across chromosomes
     t = time.time()
@@ -120,6 +120,9 @@ def process_hic(hic_mat, hic_norm_file, hic_is_vc, resolution, tss_hic_contribut
 
 def apply_kr_threshold(hic_mat, hic_norm_file, kr_cutoff):
     #Convert all entries in the hic matrix corresponding to low kr norm entries to NaN
+    #Note that in scipy sparse matrix multiplication 0*nan = 0
+    #So this doesn't convert 0's to nan only nonzero to nan
+
     norms = np.loadtxt(hic_norm_file)
     norms[norms < kr_cutoff] = np.nan
     norms[norms >= kr_cutoff] = 1

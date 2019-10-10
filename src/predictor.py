@@ -8,11 +8,10 @@ from hic import *
 
 def make_predictions(chromosome, enhancers, genes, args):
     pred = make_pred_table(chromosome, enhancers, genes, args)
+    pred = annotate_predictions(pred, args.tss_slop)
 
     hic_file, hic_norm_file, hic_is_vc = get_hic_file(chromosome, args.HiCdir)
     pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, hic_norm_file, hic_is_vc, chromosome, args)
-    
-    pred = annotate_predictions(pred, args.tss_slop)
 
     pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled_adj']], "ABC")
     pred = compute_score(pred, [pred['activity_base'], pred['powerlaw_contact_reference']], "powerlaw")
@@ -120,7 +119,7 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, hic_norm_file, hic_is_
     print('HiC added to predictions table. Elapsed time: {}'.format(time.time() - t))
 
     # QC HiC
-
+    pred = qc_hic(pred)
 
     # Add powerlaw scaling
     pred = scale_with_powerlaw(pred, args)
@@ -158,6 +157,18 @@ def add_hic_pseudocount(pred, args):
     pred['hic_kr_pl_scaled_adj'] = pred['hic_kr_pl_scaled'] + pseudocount
 
     return(pred)
+
+def qc_hic(pred, threshold = .01):
+    # Genes with insufficient hic coverage should get nan'd
+
+    summ = pred.loc[pred['isSelfPromoter'],:].groupby(['TargetGene']).agg({'hic_kr' : 'sum'})
+    bad_genes = summ.loc[summ['hic_kr'] < threshold,:].index
+
+    pred.loc[pred['TargetGene'].isin(bad_genes), 'hic_kr'] = np.nan
+
+    return pred
+
+
 
 def compute_score(enhancers, product_terms, prefix):
 
