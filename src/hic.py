@@ -40,7 +40,7 @@ def load_hic(hic_file, hic_norm_file, hic_is_vc, hic_type, hic_resolution, tss_h
     elif hic_type == 'bedpe':
         HiC = pd.read_csv(hic_file, sep="\t")
 
-    return(HiC)
+    return HiC
 
 # def juicebox_to_bedpe(hic, chromosome, resolution):
 #     hic['chr'] = chromosome
