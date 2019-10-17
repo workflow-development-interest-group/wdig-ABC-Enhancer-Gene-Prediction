@@ -108,7 +108,8 @@ def main():
     # Subset predictions
     print("Writing output files...")
     all_putative = pd.concat(all_putative_list)
-    slim_cols = ['chr','start','end','name','TargetGene','TargetGeneTSS',args.score_column]
+    all_putative['CellType'] = args.cellType
+    slim_cols = ['chr','start','end','name','TargetGene','TargetGeneTSS','CellType',args.score_column]
     if args.run_all_genes:
         all_positive = all_putative.iloc[np.logical_and.reduce((all_putative[args.score_column] > args.threshold, ~(all_putative['class'] == "promoter"))),:]
     else:
@@ -127,8 +128,8 @@ def main():
         else:
             all_pred_file_expressed = os.path.join(args.outdir, "EnhancerPredictionsAllPutative.h5")
             all_pred_file_nonexpressed = os.path.join(args.outdir, "EnhancerPredictionsAllPutativeNonExpressedGenes.h5")
-            all_putative.loc[all_putative.TargetGeneIsExpressed,:].to_hdf(all_pred_file_expressed, key='predictions')
-            all_putative.loc[~all_putative.TargetGeneIsExpressed,:].to_hdf(all_pred_file_nonexpressed, key='predictions')
+            all_putative.loc[all_putative.TargetGeneIsExpressed,:].to_hdf(all_pred_file_expressed, key='predictions', complevel=9, mode='w')
+            all_putative.loc[~all_putative.TargetGeneIsExpressed,:].to_hdf(all_pred_file_nonexpressed, key='predictions', complevel=9, mode='w')
             
     print("Done.")
     

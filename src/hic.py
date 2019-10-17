@@ -4,13 +4,13 @@ import pandas as pd
 import time, os
 
 def get_hic_file(chromosome, hic_dir, allow_vc=True):
-    hic_file = os.path.join(hic_dir, chromosome, chromosome + ".KRobserved")
-    hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".KRnorm")
+    hic_file = os.path.join(hic_dir, chromosome, chromosome + ".KRobserved.gz")
+    hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".KRnorm.gz")
 
     is_vc = False
     if allow_vc and not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
-        hic_file = os.path.join(hic_dir, chromosome, chromosome + ".VCobserved")
-        hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".VCnorm")
+        hic_file = os.path.join(hic_dir, chromosome, chromosome + ".VCobserved.gz")
+        hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".VCnorm.gz")
 
         if not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
             RuntimeError("Could not find KR or VC normalized hic files")
@@ -18,6 +18,7 @@ def get_hic_file(chromosome, hic_dir, allow_vc=True):
             print("Could not find KR normalized hic file. Using VC normalized hic file")
             is_vc = True
 
+    print("Using: " + hic_file)
     return hic_file, hic_norm, is_vc
 
 def load_hic(hic_file, hic_norm_file, hic_is_vc, hic_type, hic_resolution, tss_hic_contribution, window, min_window, gamma, interpolate_nan=True, apply_diagonal_bin_correction=True):
@@ -33,7 +34,8 @@ def load_hic(hic_file, hic_norm_file, hic_is_vc, hic_type, hic_resolution, tss_h
                             window = window, 
                             min_window = min_window, 
                             gamma = gamma,
-                            interpolate_nan = interpolate_nan)
+                            interpolate_nan = interpolate_nan,
+                            apply_diagonal_bin_correction = apply_diagonal_bin_correction)
         #HiC = juicebox_to_bedpe(HiC, chromosome, args)
     elif hic_type == 'bedpe':
         HiC = pd.read_csv(hic_file, sep="\t")
@@ -55,7 +57,11 @@ def process_hic(hic_mat, hic_norm_file, hic_is_vc, resolution, tss_hic_contribut
     t = time.time()
 
     if not hic_is_doubly_stochastic and not hic_is_vc:
-        sums = hic_mat.sum(axis = 0)
+        #Any row with Nan in it will sum to nan
+        #So need to calculate sum excluding nan
+        temp = hic_mat
+        temp.data = np.nan_to_num(temp.data, copy=False)
+        sums = temp.sum(axis = 0)
         sums = sums[~np.isnan(sums)]
         assert(np.max(sums[sums > 0])/np.min(sums[sums > 0]) < 1.001)
         mean_sum = np.mean(sums[sums > 0])

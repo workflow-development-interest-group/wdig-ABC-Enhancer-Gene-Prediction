@@ -4,8 +4,6 @@ from scipy import interpolate
 import os
 import os.path
 from subprocess import check_call, check_output, PIPE, Popen, getoutput, CalledProcessError
-#from intervaltree import IntervalTree
-# import pysam
 from tools import *
 import linecache
 import traceback
@@ -204,22 +202,8 @@ def load_enhancers(outdir=".",
 def assign_enhancer_classes(enhancers, genes, tss_slop=500):
 
     # build pyranges df 
-    # tss_pyranges = pr.PyRanges(chromosomes=genes['chr'], starts=genes['tss'] - tss_slop, ends=genes['tss'] + tss_slop)
-    # gene_pyranges = pr.PyRanges(chromosomes= genes['chr'], starts=genes['start'], ends=genes['end'])
     tss_pyranges = df_to_pyranges(genes, start_col='tss', end_col='tss', start_slop=tss_slop, end_slop=tss_slop)
     gene_pyranges = df_to_pyranges(genes)
-
-    # def grab_symbol(overlaps):
-    #     overlap = overlaps.df
-    #     x = ",".join((str(overlap[i]) for i in overlap.columns))
-    #     return x
-    # def get_tss_symbol(enhancer, tss_pyranges = tss_pyranges):
-    #    #For candidate regions that overlap gene promoters, annotate enhancers data table with the name of the gene.
-    #    if enhancer["class"] == "promoter":
-    #        start, end = sorted((enhancer.start, enhancer.end))
-    #        overlaps = tss_pyranges[enhancer.chr][start:end]
-    #        return grab_symbol(overlaps)
-    #    return ""
 
     def get_class_pyranges(enhancers, tss_pyranges = tss_pyranges, gene_pyranges = gene_pyranges): 
         '''
@@ -234,18 +218,14 @@ def assign_enhancer_classes(enhancers, genes, tss_slop=500):
         promoter_enh = enhancers.join(tss_pyranges, suffix="_promoter")
         promoter_enh = promoter_enh.df[['symbol','Cluster']].groupby('Cluster',as_index=False).aggregate(lambda x: ','.join(list(set(x))))
         
-        #genes = np.array(genic_enh.Cluster)
-        #promoters = np.array(promoter_enh.Cluster)
         return genic_enh, promoter_enh
 
     # label everything as intergenic
     enhancers["class"] = "intergenic"
-    #enhancer = pr.PyRanges(enhancers.rename(columns={'chr':'Chromosome', 'start':'Start', 'end':'End'}))
     enh = df_to_pyranges(enhancers).cluster()
     # use clustering as unique identifier for each enhancer region
     # enh = enhancer.cluster()  
     genes, promoters = get_class_pyranges(enh)
-    #enhancers = enh.df.rename(columns={'Chromosome':'chr', 'Start':'start', 'End':'end'})
     enhancers = enh.df.drop(['Chromosome','Start','End'], axis=1)
     enhancers.loc[enhancers['Cluster'].isin(genes.Cluster), 'class'] = 'genic'
     enhancers.loc[enhancers['Cluster'].isin(promoters.Cluster), 'class'] = 'promoter' 
@@ -260,88 +240,42 @@ def assign_enhancer_classes(enhancers, genes, tss_slop=500):
     print("         Genic: {}".format(sum(enhancers['isGenicElement'])))
     print("         Intergenic: {}".format(sum(enhancers['isIntergenicElement'])))
 
-    # import pdb
-    # pdb.set_trace()
-
     #Add promoter/genic symbol
     enhancers = enhancers.merge(promoters.rename(columns={'symbol':'promoterSymbol'}), on='Cluster', how = 'left').fillna(value={'promoterSymbol':""})
     enhancers = enhancers.merge(genes.rename(columns={'symbol':'genicSymbol'}), on='Cluster', how = 'left').fillna(value={'genicSymbol':""})
     enhancers.drop(['Cluster'], axis=1, inplace=True)
 
-    #enhancers["enhancerSymbol"] = enhancers.apply(get_tss_symbol, axis=1)
-    #assert (enhancers.enhancerSymbol == "\n").sum() == 0
-
     # just to keep things consistent with original code 
     enhancers["name"] = enhancers.apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
     return enhancers
 
-# def assign_enhancer_classes(enhancers, genes, tss_slop=500, class_override_file=None, cellType=None):
-#     # TO DO: use pyranges
-    
-#     # build interval trees
-#     tss_intervals = {}
-#     gene_intervals = {}
-#     for chr, chrdata in genes.groupby('chr'):
-#         tss_intervals[chr] = IntervalTree.from_tuples(zip(chrdata.tss - tss_slop, chrdata.tss + tss_slop,
-#                                                           [str(x) for x in chrdata.symbol]))
-#         gene_intervals[chr] = IntervalTree.from_tuples(zip(chrdata.start, chrdata.end))
-
-#     def get_class(enhancer):
-#         start, end = sorted((enhancer.start, enhancer.end))
-#         if tss_intervals[enhancer.chr][start:end]:
-#             return "promoter"
-#         if gene_intervals[enhancer.chr][start:end]:
-#             return "genic"
-#         return "intergenic"
-
-#     def get_tss_symbol(enhancer):
-#         #For candidate regions that overlap gene promoters, annotate enhancers data table with the name of the gene.
-#         if enhancer["class"] == "promoter":
-#             start, end = sorted((enhancer.start, enhancer.end))
-#             overlaps = tss_intervals[enhancer.chr][start:end]
-#             return ",".join(list(set([o[2] for o in overlaps])))
-#         return ""
-
-#     enhancers["class"] = enhancers.apply(get_class, axis=1)
-#     enhancers["isPromoterElement"] = enhancers["class"] == "promoter"
-#     enhancers["isGenicElement"] = enhancers["class"] == "genic"
-#     enhancers["isIntergenicElement"] = enhancers["class"] == "intergenic"
-#     enhancers["enhancerSymbol"] = enhancers.apply(get_tss_symbol, axis=1)
-#     assert (enhancers.enhancerSymbol == "\n").sum() == 0
-#     enhancers["name"] = enhancers.apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
-
-#     if class_override_file is not None:
-#         enhancers = overrideEnhancerAnnotations(enhancers, cellType, class_override_file)
-
-#     return(enhancers)
-
 #TO DO: convert to pyranges
-def overrideEnhancerAnnotations(enhancers, cell_line, override_file):
-    #Override enhancer class with manual annotations
+# def overrideEnhancerAnnotations(enhancers, cell_line, override_file):
+#     #Override enhancer class with manual annotations
 
-    override = pandas.read_csv(override_file, sep="\t")
-    override = override.loc[override['cellType'] == cell_line, :]
+#     override = pandas.read_csv(override_file, sep="\t")
+#     override = override.loc[override['cellType'] == cell_line, :]
 
-    if override.shape[0] > 0:
-        enhancers = read_enhancers(enhancers)
-    else:
-        return(enhancers)
+#     if override.shape[0] > 0:
+#         enhancers = read_enhancers(enhancers)
+#     else:
+#         return(enhancers)
 
-    #for each entry in the override file find the overlaps with enhancers
-    #Then modify each enhancer entry appropriately
-    for idx, row in override.iterrows():
-        ovl_idx = enhancers.within_range(row['chr'],row['start'],row['end']).index
+#     #for each entry in the override file find the overlaps with enhancers
+#     #Then modify each enhancer entry appropriately
+#     for idx, row in override.iterrows():
+#         ovl_idx = enhancers.within_range(row['chr'],row['start'],row['end']).index
 
-        enhancers.ranges.loc[ovl_idx, 'class'] = row['class']
+#         enhancers.ranges.loc[ovl_idx, 'class'] = row['class']
 
-        #Now need to update various columns derived from 'class'
-        enhancers.ranges.loc[ovl_idx, 'isPromoterElement'] = row['class'] == 'promoter'
-        enhancers.ranges.loc[ovl_idx, 'isGenicElement'] = row['class'] == 'genic'
-        enhancers.ranges.loc[ovl_idx, 'isIntergenicElement'] = row['class'] == 'intergenic'
+#         #Now need to update various columns derived from 'class'
+#         enhancers.ranges.loc[ovl_idx, 'isPromoterElement'] = row['class'] == 'promoter'
+#         enhancers.ranges.loc[ovl_idx, 'isGenicElement'] = row['class'] == 'genic'
+#         enhancers.ranges.loc[ovl_idx, 'isIntergenicElement'] = row['class'] == 'intergenic'
 
-        enhancers.ranges.loc[ovl_idx, 'name'] = enhancers.ranges.loc[ovl_idx].apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
+#         enhancers.ranges.loc[ovl_idx, 'name'] = enhancers.ranges.loc[ovl_idx].apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
 
-    return enhancers.ranges
+#     return enhancers.ranges
 
 def run_count_reads(target, output, bed_file, genome_sizes, use_fast_count):
     if target.endswith(".bam"):
@@ -469,7 +403,7 @@ def count_features_for_bed(df, bed_file, genome_sizes, features, directory, file
 def count_single_feature_for_bed(df, bed_file, genome_sizes, feature_bam, feature, directory, filebase, skip_rpkm_quantile, force, use_fast_count):
     orig_shape = df.shape[0]
     feature_name = feature + "." + os.path.basename(feature_bam)
-    feature_outfile = os.path.join(directory, "{}.{}.CountReads.bed".format(filebase, feature_name))
+    feature_outfile = os.path.join(directory, "{}.{}.CountReads.bedgraph".format(filebase, feature_name))
 
     if force or (not os.path.exists(feature_outfile)) or (os.path.getsize(feature_outfile) == 0):
         print("Regenerating", feature_outfile)
@@ -490,7 +424,7 @@ def count_single_feature_for_bed(df, bed_file, genome_sizes, feature_bam, featur
     df = df.merge(domain_counts.drop_duplicates())
     #df = smart_merge(df, domain_counts.drop_duplicates())
 
-    assert df.shape[0] == orig_shape
+    assert df.shape[0] == orig_shape, "Dimension mismatch"
 
     df[feature_name + ".RPM"] = 1e6 * df[featurecount] / float(total_counts)
 

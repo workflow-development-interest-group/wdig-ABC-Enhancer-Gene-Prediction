@@ -23,7 +23,7 @@ def parseargs():
     parser.add_argument('--hicDir', help="Directory containing observed HiC KR normalized matrices. File naming and structure should be: hicDir/chr*/chr*.KRobserved")
     parser.add_argument('--outDir', help="Output directory")
     parser.add_argument('--resolution', default=5000, type=int, help="Resolution of hic dataset (in bp)")
-    parser.add_argument('--minWindow', default=5000, type=int, help="Minimum distance between bins to include in powerlaw fit (bp). Recommended to be at >= resolution to avoid using the diagonal of the HiC Matrix")
+    parser.add_argument('--minWindow', default=5000, type=int, help="Minimum distance between bins to include in powerlaw fit (bp). Recommended to be at least >= resolution to avoid using the diagonal of the HiC Matrix")
     parser.add_argument('--maxWindow', default=1000000, type=int, help="Maximum distance between bins to include in powerlaw fit (bp)")
 
     args = parser.parse_args()
@@ -86,7 +86,7 @@ def do_powerlaw_fit(HiC):
     #TO DO:
     #Print out mean/var plot of powerlaw relationship
     HiC_summary = HiC.groupby('dist_for_fit').agg({'hic_kr' : 'sum'})
-    HiC_summary['hic_kr'] = HiC_summary.hic_kr / HiC_summary.hic_kr.sum() #technically this normalization should be over the entire genome (not just to maxWindow). Will only affect intersept though..
+    HiC_summary['hic_kr'] = HiC_summary.hic_kr / HiC_summary.hic_kr.sum() #technically this normalization should be over the entire genome (not just to maxWindow). Will only affect intercept though..
     res = stats.linregress(np.log(HiC_summary.index), np.log(HiC_summary['hic_kr']))
 
     hic_mean_var = HiC.groupby('dist_for_fit').agg({'hic_kr' : ['mean','var']})

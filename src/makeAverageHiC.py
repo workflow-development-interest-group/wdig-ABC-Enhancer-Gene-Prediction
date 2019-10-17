@@ -4,6 +4,7 @@ from functools import reduce
 import argparse
 import sys, os, os.path
 from tools import write_params
+import pyranges
 
 def parseargs():
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
@@ -15,10 +16,11 @@ def parseargs():
                                      formatter_class=formatter)
     readable = argparse.FileType('r')
     parser.add_argument('--celltypes', required=True, help="Comma delimitted list of cell types")
+    parser.add_argument('--chromosome', required=True, help="Chromosome to compute on")
     parser.add_argument('--basedir', required=True, help="Basedir")
     parser.add_argument('--outDir', required=True, help="Output directory")
     parser.add_argument('--resolution', default=5000, type=int, help="Resolution of hic dataset (in bp)")
-    parser.add_argument('--ref_scale', default=-1.91, type=float, help="Reference scale parameter")
+    parser.add_argument('--ref_scale', default=5.41, type=float, help="Reference scale parameter")
     parser.add_argument('--ref_gamma', default=-.876, type=float, help="Reference gamma parameter")
     parser.add_argument('--min_cell_types_required', default=3, type=int, help="Minimum number of non-nan entries required to calculate average for a hic bin")
 
@@ -35,44 +37,42 @@ def main():
     #Parse cell types
     cell_types = args.celltypes.split(",")
 
-    chromosomes = ['chr' + str(x) for x in range(1,23)] + ['chrX'] 
-    chromosomes = ['chr22']
+    # chromosomes = ['chr' + str(x) for x in range(1,23)] + ['chrX'] 
+    # chromosomes = ['chr22']
 
     special_value = np.Inf
 
-    for chromosome in chromosomes:
-        hic_list = [process_chr(cell_type, chromosome, args.basedir, args.resolution, args.ref_scale, args.ref_gamma, special_value) for cell_type in cell_types]
+    #for chromosome in chromosomes:
+    hic_list = [process_chr(cell_type, args.chromosome, args.basedir, args.resolution, args.ref_scale, args.ref_gamma, special_value) for cell_type in cell_types]
+    hic_list = [x for x in hic_list if x is not None]
 
-        # import pdb
-        # pdb.set_trace()
+    #Make average
+    #Merge all hic matrices
+    #Need to deal with nan vs 0 here. In the KR normalized matrices there are nan which we want to deal as missing. 
+    #Rows that are not present in the hic dataframe should be considered 0
+    #But after doing an outer join these rows will be represented as nan in the merged dataframe.
+    #So need a way to distinguish nan vs 0.
+    #Hack: convert all nan in the celltype specific hic dataframes to a special value. Then replace this special value after merging
+    all_hic = reduce(lambda x, y: pd.merge(x, y, on = ['bin1', 'bin2'], how = 'outer'), hic_list)
+    all_hic.fillna(value=0, inplace=True)
+    all_hic.replace(to_replace = special_value, value = np.nan, inplace=True)
 
-        #Make average
-        #TO DO: Enforce minimum number of cell types required for averaging.
-        #Merge all hic matrices
-        #Need to deal with nan vs 0 here. In the KR normalized matrices there are nan which we want to deal as missing. 
-        #Rows that are not present in the hic dataframe should be considered 0
-        #But after doing an outer join these rows will be represented as nan in the merged dataframe.
-        #So need a way to distinguish nan vs 0.
-        #Hack: convert all nan in the celltype specific hic dataframes to a special value. Then replace this special value after merging
-        all_hic = reduce(lambda x, y: pd.merge(x, y, on = ['bin1', 'bin2'], how = 'outer'), hic_list)
-        all_hic.fillna(value=0, inplace=True)
-        all_hic.replace(to_replace = special_value, value = np.nan, inplace=True)
+    #compute the average
+    cols_for_avg = list(filter(lambda x:'hic_kr' in x, all_hic.columns))
+    all_hic['avg_hic'] = all_hic[cols_for_avg].mean(axis=1)
 
-        #compute the average
-        cols_for_avg = list(filter(lambda x:'hic_kr' in x, all_hic.columns))
-        all_hic['avg_hic'] = all_hic[cols_for_avg].mean(axis=1)
+    #Check minimum number of cols
+    num_good = len(cols_for_avg) - np.isnan(all_hic[cols_for_avg]).sum(axis=1)
+    all_hic.loc[num_good < args.min_cell_types_required, 'avg_hic'] = np.nan
 
-        #Check minimum number of cols
-        num_good = len(cols_for_avg) - np.isnan(all_hic[cols_for_avg]).sum(axis=1)
-        all_hic.loc[num_good < args.min_cell_types_required, 'avg_hic'] = np.nan
+    #Setup final matrix
+    all_hic.drop(cols_for_avg, inplace=True, axis=1)
+    all_hic['bin1'] = all_hic['bin1'] * args.resolution
+    all_hic['bin2'] = all_hic['bin2'] * args.resolution
+    all_hic = all_hic.loc[np.logical_or(all_hic['avg_hic'] > 0, np.isnan(all_hic['avg_hic'])), ] # why do these exist?
 
-        #Setup final matrix
-        all_hic.drop(cols_for_avg, inplace=True, axis=1)
-        all_hic['bin1'] = all_hic['bin1'] * args.resolution
-        all_hic['bin2'] = all_hic['bin2'] * args.resolution
-
-        os.makedirs(os.path.join(args.outDir, chromosome), exist_ok=True)
-        all_hic.to_csv(os.path.join(args.outDir, chromosome, chromosome + ".KRobserved.gz"), sep="\t", header=False, index=False, compression="gzip", na_rep=np.nan)
+    os.makedirs(os.path.join(args.outDir, args.chromosome), exist_ok=True)
+    all_hic.to_csv(os.path.join(args.outDir, args.chromosome, args.chromosome + ".KRobserved.gz"), sep="\t", header=False, index=False, compression="gzip", na_rep=np.nan)
 
 def scale_hic_with_powerlaw(hic, resolution, scale_ref, gamma_ref, scale, gamma):
 
@@ -93,8 +93,11 @@ def process_chr(cell_type, chromosome, basedir, resolution, scale_ref, gamma_ref
     # import pdb
     # pdb.set_trace()
 
-    hic_file = os.path.join(basedir, cell_type, "5kb_resolution_intra", chromosome, chromosome + ".KRobserved")
-    hic_norm_file = os.path.join(basedir, cell_type, "5kb_resolution_intra", chromosome, chromosome + ".KRnorm")
+    hic_file, hic_norm_file, is_vc = get_hic_file(chromosome, os.path.join(basedir, cell_type, "5kb_resolution_intra"), allow_vc = True)
+    if is_vc:
+        return None
+    # hic_file = os.path.join(basedir, cell_type, "5kb_resolution_intra", chromosome, chromosome + ".KRobserved")
+    # hic_norm_file = os.path.join(basedir, cell_type, "5kb_resolution_intra", chromosome, chromosome + ".KRnorm")
 
     #Load gamma and scale
     pl_summary = pd.read_csv(os.path.join(basedir, cell_type, "5kb_resolution_intra/powerlaw/hic.powerlaw.txt"), sep="\t")
