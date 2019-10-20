@@ -45,6 +45,7 @@ def main():
     #for chromosome in chromosomes:
     hic_list = [process_chr(cell_type, args.chromosome, args.basedir, args.resolution, args.ref_scale, args.ref_gamma, special_value) for cell_type in cell_types]
     hic_list = [x for x in hic_list if x is not None]
+    hic_list = [df.set_index(['bin1','bin2']) for df in hic_list]
 
     #Make average
     #Merge all hic matrices
@@ -53,21 +54,33 @@ def main():
     #But after doing an outer join these rows will be represented as nan in the merged dataframe.
     #So need a way to distinguish nan vs 0.
     #Hack: convert all nan in the celltype specific hic dataframes to a special value. Then replace this special value after merging
-    #TO DO: This is very memory intensive!
-    all_hic = reduce(lambda x, y: pd.merge(x, y, on = ['bin1', 'bin2'], how = 'outer'), hic_list)
+    #TO DO: This is very memory intensive! (consider pandas.join or pandas.concat)
+    # import pdb
+    # pdb.set_trace()
+
+    all_hic = pd.concat(hic_list, axis=1, join='outer', copy=False)
+    hic_list = None #Clear from memory
+    
+    #all_hic = pd.DataFrame().join(hic_list, how="outer", on=['bin1','bin2'])
+    #all_hic = reduce(lambda x, y: pd.merge(x, y, on = ['bin1', 'bin2'], how = 'outer'), hic_list)
     all_hic.fillna(value=0, inplace=True)
     all_hic.replace(to_replace = special_value, value = np.nan, inplace=True)
 
     #compute the average
     cols_for_avg = list(filter(lambda x:'hic_kr' in x, all_hic.columns))
-    all_hic['avg_hic'] = all_hic[cols_for_avg].mean(axis=1)
+    
+    #all_hic['avg_hic'] = all_hic[cols_for_avg].mean(axis=1)
+    #avg_hic = all_hic[cols_for_avg].mean(axis=1)
+    avg_hic = all_hic.mean(axis=1)
+    num_good = len(cols_for_avg) - np.isnan(all_hic[cols_for_avg]).sum(axis=1)
 
     #Check minimum number of cols
-    num_good = len(cols_for_avg) - np.isnan(all_hic[cols_for_avg]).sum(axis=1)
+    all_hic.drop(cols_for_avg, inplace=True, axis=1)
+    all_hic.reset_index(level=all_hic.index.names, inplace=True)
+    all_hic['avg_hic'] = avg_hic
     all_hic.loc[num_good < args.min_cell_types_required, 'avg_hic'] = np.nan
 
     #Setup final matrix
-    all_hic.drop(cols_for_avg, inplace=True, axis=1)
     all_hic['bin1'] = all_hic['bin1'] * args.resolution
     all_hic['bin2'] = all_hic['bin2'] * args.resolution
     all_hic = all_hic.loc[np.logical_or(all_hic['avg_hic'] > 0, np.isnan(all_hic['avg_hic'])), ] # why do these 0's exist?
