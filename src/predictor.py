@@ -13,7 +13,7 @@ def make_predictions(chromosome, enhancers, genes, args):
     hic_file, hic_norm_file, hic_is_vc = get_hic_file(chromosome, args.HiCdir)
     pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, hic_norm_file, hic_is_vc, chromosome, args)
 
-    pred = compute_score(pred, [pred['activity_base'], pred['hic_kr_pl_scaled_adj']], "ABC")
+    pred = compute_score(pred, [pred['activity_base'], pred['hic_contact_pl_scaled_adj']], "ABC")
     pred = compute_score(pred, [pred['activity_base'], pred['powerlaw_contact_reference']], "powerlaw")
 
     return pred
@@ -81,22 +81,22 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, hic_norm_file, hic_is_
         #Overlap in one direction
         enh_hic1 = df_to_pyranges(enh, start_col = 'enh_midpoint', end_col = 'enh_midpoint', end_slop = 1).join(hic1).df
         genes_hic2 = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', end_slop = 1).join(hic2).df
-        ovl12 = enh_hic1[['enh_idx','hic_idx','hic_kr']].merge(genes_hic2[['gene_idx', 'hic_idx']], on = 'hic_idx')
+        ovl12 = enh_hic1[['enh_idx','hic_idx','hic_contact']].merge(genes_hic2[['gene_idx', 'hic_idx']], on = 'hic_idx')
 
         #Overlap in the other direction
         enh_hic2 = df_to_pyranges(enh, start_col = 'enh_midpoint', end_col = 'enh_midpoint', end_slop = 1).join(hic2).df
         genes_hic1 = df_to_pyranges(genes, start_col = 'TargetGeneTSS', end_col = 'TargetGeneTSS', end_slop = 1).join(hic1).df
-        ovl21 = enh_hic2[['enh_idx','hic_idx','hic_kr']].merge(genes_hic1[['gene_idx', 'hic_idx']], on = ['hic_idx'])
+        ovl21 = enh_hic2[['enh_idx','hic_idx','hic_contact']].merge(genes_hic1[['gene_idx', 'hic_idx']], on = ['hic_idx'])
 
         #Concatenate both directions and merge into preditions
         ovl = pd.concat([ovl12, ovl21]).drop_duplicates()
         pred = pred.merge(ovl, on = ['enh_idx', 'gene_idx'], how = 'left')
-        pred.fillna(value={'hic_kr' : 0}, inplace=True)
+        pred.fillna(value={'hic_contact' : 0}, inplace=True)
     elif args.hic_type == "juicebox":
         #Merge directly using indices
         #Could also do this by indexing into the sparse matrix (instead of merge) but this seems to be slower
         #Index into sparse matrix
-        #pred['hic_kr'] = [HiC[i,j] for (i,j) in pred[['enh_bin','tss_bin']].values.tolist()]
+        #pred['hic_contact'] = [HiC[i,j] for (i,j) in pred[['enh_bin','tss_bin']].values.tolist()]
         
         pred['enh_bin'] = np.floor(pred['enh_midpoint'] / args.hic_resolution).astype(int)
         pred['tss_bin'] = np.floor(pred['TargetGeneTSS'] / args.hic_resolution).astype(int)
@@ -106,13 +106,13 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, hic_norm_file, hic_is_
             pred['bin1'] = np.amin(pred[['enh_bin', 'tss_bin']], axis = 1)
             pred['bin2'] = np.amax(pred[['enh_bin', 'tss_bin']], axis = 1)
             pred = pred.merge(HiC, how = 'left', on = ['bin1','bin2'])
-            pred.fillna(value={'hic_kr' : 0}, inplace=True)
+            pred.fillna(value={'hic_contact' : 0}, inplace=True)
         else:
             # The matrix is not triangular, its full
             # For VC assume genes correspond to rows and columns to enhancers
             pred = pred.merge(HiC, how = 'left', left_on = ['tss_bin','enh_bin'], right_on=['bin1','bin2'])
 
-        pred.fillna(value={'hic_kr' : 0}, inplace=True)
+        pred.fillna(value={'hic_contact' : 0}, inplace=True)
 
         # QC juicebox HiC
         pred = qc_hic(pred)
@@ -136,13 +136,13 @@ def scale_with_powerlaw(pred, args):
     #Scale hic values to
 
     if not args.scale_hic_using_powerlaw:
-        pred['hic_kr_pl_scaled'] = pred['hic_kr']
+        pred['hic_contact_pl_scaled'] = pred['hic_contact']
     else:
         powerlaw_estimate = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
         powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma_reference)
         pred['powerlaw_contact'] = powerlaw_estimate
         pred['powerlaw_contact_reference'] = powerlaw_estimate_reference
-        pred['hic_kr_pl_scaled'] = pred['hic_kr'] * (powerlaw_estimate_reference / powerlaw_estimate)
+        pred['hic_contact_pl_scaled'] = pred['hic_contact'] * (powerlaw_estimate_reference / powerlaw_estimate)
 
     return(pred)
 
@@ -154,21 +154,19 @@ def add_hic_pseudocount(pred, args):
     
     pseudocount = np.amin(pd.DataFrame({'a' : powerlaw_fit, 'b' : powerlaw_fit_at_ref}), axis = 1)
     pred['hic_pseudocount'] = pseudocount
-    pred['hic_kr_pl_scaled_adj'] = pred['hic_kr_pl_scaled'] + pseudocount
+    pred['hic_contact_pl_scaled_adj'] = pred['hic_contact_pl_scaled'] + pseudocount
 
     return(pred)
 
 def qc_hic(pred, threshold = .01):
     # Genes with insufficient hic coverage should get nan'd
 
-    summ = pred.loc[pred['isSelfPromoter'],:].groupby(['TargetGene']).agg({'hic_kr' : 'sum'})
-    bad_genes = summ.loc[summ['hic_kr'] < threshold,:].index
+    summ = pred.loc[pred['isSelfPromoter'],:].groupby(['TargetGene']).agg({'hic_contact' : 'sum'})
+    bad_genes = summ.loc[summ['hic_contact'] < threshold,:].index
 
-    pred.loc[pred['TargetGene'].isin(bad_genes), 'hic_kr'] = np.nan
+    pred.loc[pred['TargetGene'].isin(bad_genes), 'hic_contact'] = np.nan
 
     return pred
-
-
 
 def compute_score(enhancers, product_terms, prefix):
 

@@ -8,11 +8,11 @@ def get_hic_file(chromosome, hic_dir, allow_vc=True):
     hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".KRnorm.gz")
 
     is_vc = False
-    if allow_vc and not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
+    if allow_vc and not hic_exists(hic_file):
         hic_file = os.path.join(hic_dir, chromosome, chromosome + ".VCobserved.gz")
         hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".VCnorm.gz")
 
-        if not (os.path.exists(hic_file) and os.path.getsize(hic_file) > 0):
+        if not hic_exists(hic_file):
             RuntimeError("Could not find KR or VC normalized hic files")
         else:
             print("Could not find KR normalized hic file. Using VC normalized hic file")
@@ -20,6 +20,15 @@ def get_hic_file(chromosome, hic_dir, allow_vc=True):
 
     print("Using: " + hic_file)
     return hic_file, hic_norm, is_vc
+
+def hic_exists(file):
+    if not os.path.exists(file):
+        return False
+    elif file.endswith('gz'):
+        #gzip file still have some size. This is a hack
+        return (os.path.getsize(file) > 100)
+    else:
+        return (os.path.getsize(file) > 0)
 
 def load_hic(hic_file, hic_norm_file, hic_is_vc, hic_type, hic_resolution, tss_hic_contribution, window, min_window, gamma, interpolate_nan=True, apply_diagonal_bin_correction=True):
     print("Loading HiC")
@@ -65,8 +74,12 @@ def process_hic(hic_mat, hic_norm_file, hic_is_vc, resolution, tss_hic_contribut
         sums = sums[~np.isnan(sums)]
         assert(np.max(sums[sums > 0])/np.min(sums[sums > 0]) < 1.001)
         mean_sum = np.mean(sums[sums > 0])
-        print('HiC Matrix has row sums of {}, making doubly stochastic...'.format(mean_sum))
-        hic_mat = hic_mat.multiply(1/mean_sum)
+
+        if abs(mean_sum - 1) < .001:
+            print('HiC Matrix has row sums of {}, continuing without making doubly stochastic'.format(mean_sum))
+        else:
+            print('HiC Matrix has row sums of {}, making doubly stochastic...'.format(mean_sum))
+            hic_mat = hic_mat.multiply(1/mean_sum)
 
     #Slow version. Its a constant scalar so don't need to to the matrix multiplication
     # kr_vec = np.repeat(np.sqrt(mean_sum), sums.shape[1])
@@ -105,7 +118,7 @@ def process_hic(hic_mat, hic_norm_file, hic_is_vc, resolution, tss_hic_contribut
 
     #Turn into dataframe
     hic_mat = hic_mat.tocoo(copy=False)
-    hic_df = pd.DataFrame({'bin1': hic_mat.row, 'bin2': hic_mat.col, 'hic_kr': hic_mat.data})
+    hic_df = pd.DataFrame({'bin1': hic_mat.row, 'bin2': hic_mat.col, 'hic_contact': hic_mat.data})
 
     #Prune to window
     hic_df = hic_df.loc[np.logical_and(abs(hic_df['bin1'] - hic_df['bin2']) <= window/resolution, abs(hic_df['bin1'] - hic_df['bin2']) >= min_window/resolution)]
@@ -116,8 +129,8 @@ def process_hic(hic_mat, hic_norm_file, hic_is_vc, resolution, tss_hic_contribut
     #So need to fill these. Use powerlaw. 
     #Not ideal obviously but the scipy interpolation algos are either very slow or don't work since the nan structure implies that not all nans are interpolated
     if interpolate_nan:
-        nan_loc = np.isnan(hic_df['hic_kr'])
-        hic_df.loc[nan_loc,'hic_kr'] = get_powerlaw_at_distance(abs(hic_df.loc[nan_loc,'bin1'] - hic_df.loc[nan_loc,'bin2']) * resolution, gamma)
+        nan_loc = np.isnan(hic_df['hic_contact'])
+        hic_df.loc[nan_loc,'hic_contact'] = get_powerlaw_at_distance(abs(hic_df.loc[nan_loc,'bin1'] - hic_df.loc[nan_loc,'bin2']) * resolution, gamma)
 
     print('process.hic: Elapsed time: {}'.format(time.time() - t))
 
@@ -138,7 +151,7 @@ def apply_kr_threshold(hic_mat, hic_norm_file, kr_cutoff):
 
 def hic_to_sparse(filename, norm_file, resolution, hic_is_doubly_stochastic=False):
     t = time.time()
-    HiC = pd.read_table(filename, names=["bin1", "bin2", "hic_kr"],
+    HiC = pd.read_table(filename, names=["bin1", "bin2", "hic_contact"],
                         header=None, engine='c', memory_map=True)
 
     # verify our assumptions
@@ -153,7 +166,7 @@ def hic_to_sparse(filename, norm_file, resolution, hic_is_doubly_stochastic=Fals
     # accumulates repeated indices, so this will do the right thing.
     row = np.floor(HiC.bin1.values / resolution).astype(int)
     col = np.floor(HiC.bin2.values / resolution).astype(int)
-    dat = HiC.hic_kr.values
+    dat = HiC.hic_contact.values
 
     #JN: Need both triangles in order to compute row/column sums to make double stochastic.
     #If juicebox is upgraded to return DS matrices, then can remove one triangle

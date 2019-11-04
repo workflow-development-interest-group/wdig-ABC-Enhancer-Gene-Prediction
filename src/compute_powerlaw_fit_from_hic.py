@@ -50,6 +50,7 @@ def main():
 
 def load_hic_juicebox(args):
     chromosomes = ['chr' + str(x) for x in  list(range(1,23))] + ['chrX']
+    #chromosomes = ['chr22']
     #file_list = glob.glob(os.path.join(args.hicDir,'chr*/chr*.KRobserved'))
 
     all_data_list = []
@@ -85,11 +86,12 @@ def do_powerlaw_fit(HiC):
 
     #TO DO:
     #Print out mean/var plot of powerlaw relationship
-    HiC_summary = HiC.groupby('dist_for_fit').agg({'hic_kr' : 'sum'})
-    HiC_summary['hic_kr'] = HiC_summary.hic_kr / HiC_summary.hic_kr.sum() #technically this normalization should be over the entire genome (not just to maxWindow). Will only affect intercept though..
-    res = stats.linregress(np.log(HiC_summary.index), np.log(HiC_summary['hic_kr']))
+    HiC_summary = HiC.groupby('dist_for_fit').agg({'hic_contact' : 'sum'})
+    HiC_summary['hic_contact'] = HiC_summary.hic_contact / HiC_summary.hic_contact.sum() #technically this normalization should be over the entire genome (not just to maxWindow). Will only affect intercept though..
+    res = stats.linregress(np.log(HiC_summary.index), np.log(HiC_summary['hic_contact']))
 
-    hic_mean_var = HiC.groupby('dist_for_fit').agg({'hic_kr' : ['mean','var']})
+    hic_mean_var = HiC.groupby('dist_for_fit').agg({'hic_contact' : ['mean','var']})
+    hic_mean_var.columns = ['mean', 'var']
 
     return res.slope, res.intercept, hic_mean_var
 

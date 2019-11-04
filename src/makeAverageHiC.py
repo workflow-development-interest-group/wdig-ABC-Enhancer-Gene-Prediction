@@ -6,6 +6,8 @@ import sys, os, os.path
 from tools import write_params
 import pyranges
 
+# To do
+# Final output matrix needs to be KR normed as well
 def parseargs():
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
         pass
@@ -89,7 +91,7 @@ def main():
     all_hic = all_hic.loc[np.logical_or(all_hic['avg_hic'] > 0, np.isnan(all_hic['avg_hic'])), ] # why do these 0's exist?
 
     os.makedirs(os.path.join(args.outDir, args.chromosome), exist_ok=True)
-    all_hic.to_csv(os.path.join(args.outDir, args.chromosome, args.chromosome + ".KRobserved.gz"), sep="\t", header=False, index=False, compression="gzip", na_rep=np.nan)
+    all_hic.to_csv(os.path.join(args.outDir, args.chromosome, args.chromosome + ".avg.gz"), sep="\t", header=False, index=False, compression="gzip", na_rep=np.nan)
 
 def scale_hic_with_powerlaw(hic, resolution, scale_ref, gamma_ref, scale, gamma):
 
