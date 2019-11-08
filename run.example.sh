@@ -45,7 +45,7 @@ python src/predict.py \
 --HiCdir example_chr22/input_data/HiC/raw/ \
 --hic_resolution 5000 \
 --scale_hic_using_powerlaw \
---threshold .022 \
+--threshold .016 \
 --cellType K562 \
 --outdir example_chr22/ABC_output/Predictions/ \
 --make_all_putative

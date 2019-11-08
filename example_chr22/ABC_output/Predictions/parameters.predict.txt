@@ -3,7 +3,7 @@ genes example_chr22/ABC_output/Neighborhoods/GeneList.txt
 outdir example_chr22/ABC_output/Predictions/
 window 5000000
 score_column ABC.Score
-threshold 0.022
+threshold 0.016
 cellType K562
 HiCdir example_chr22/input_data/HiC/raw/
 hic_resolution 5000

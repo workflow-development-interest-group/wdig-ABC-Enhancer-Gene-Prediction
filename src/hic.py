@@ -81,16 +81,6 @@ def process_hic(hic_mat, hic_norm_file, hic_is_vc, resolution, tss_hic_contribut
             print('HiC Matrix has row sums of {}, making doubly stochastic...'.format(mean_sum))
             hic_mat = hic_mat.multiply(1/mean_sum)
 
-    #Slow version. Its a constant scalar so don't need to to the matrix multiplication
-    # kr_vec = np.repeat(np.sqrt(mean_sum), sums.shape[1])
-    # norm_mat = ssp.dia_matrix((1.0 / kr_vec, [0]), (sums.shape[1], sums.shape[1]))
-    # hic_mat = norm_mat * hic_mat * norm_mat
-
-    #Adjust diagonal of matrix based on neighboring bins
-    # hic_mat = hic_mat.tolil(copy=False)
-    # for ii in range(1, sums.shape[1] - 1):
-    #     hic_mat[ii,ii] = max(hic_mat[ii,ii-1], hic_mat[ii,ii+1]) * args.tss_hic_contribution / 100
-
     #Adjust diagonal of matrix based on neighboring bins
     #First and last rows need to be treated differently
     if apply_diagonal_bin_correction:
