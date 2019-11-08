@@ -127,7 +127,7 @@ def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None, fail_on_nonuni
     names = bed.name.str.split(";", expand=True)
     assert(len(names.columns) == len(name_cols.split(",")))
     names.columns = name_cols.split(",")
-    bed = pandas.concat([bed, names], axis=1)
+    bed = pd.concat([bed, names], axis=1)
 
     bed['name'] = bed[main_name]
     bed = bed.sort_values(by=['chr','start'])
@@ -288,7 +288,7 @@ def run_count_reads(target, output, bed_file, genome_sizes, use_fast_count):
         raise ValueError("File {} name was not in .bam, .tagAlign.gz, .bw".format(target))
 
 
-def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verbose=True):
+def count_bam(bamfile, bed_file, output, genome_sizes, use_fast_count=True, verbose=False):
     completed = True
         
     #Fast count:

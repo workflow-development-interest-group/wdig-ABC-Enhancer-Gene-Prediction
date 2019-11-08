@@ -1,6 +1,22 @@
 # Test run ABC code
 cd /seq/lincRNA/RAP/Promoters/ABC-Enhancer-Gene-Prediction;
 
+## HiC Section
+# python src/juicebox_dump.py \
+# --hic_file https://hicfiles.s3.amazonaws.com/hiseq/k562/in-situ/combined_30.hic \
+# --juicebox "java -jar /seq/lincRNA/Software/juicer/GridEngine8/scripts/juicer_tools.jar" \
+# --outdir example_chr22/input_data/HiC/raw/ \
+# --chromosomes 22
+
+# python src/compute_powerlaw_fit_from_hic.py \
+# --hicDir example_chr22/input_data/HiC/raw/ \
+# --outDir example_chr22/input_data/HiC/raw/powerlaw/ \
+# --maxWindow 1000000 \
+# --minWindow 5000 \
+# --resolution 5000 \
+# --chr 'chr22'
+
+#Peaks
 use MACS2;
 macs2 callpeak \
 -t example_chr22/input_data/Chromatin/wgEncodeUwDnaseK562AlnRep1.chr22.bam \
@@ -28,6 +44,7 @@ python src/makeCandidateRegions.py \
 --peakExtendFromSummit 250 \
 --nStrongestPeaks 3000 
 
+#Nbhds
 python src/run.neighborhoods.py \
 --candidate_enhancer_regions example_chr22/ABC_output/Peaks/wgEncodeUwDnaseK562AlnRep1.chr22.macs2_peaks.narrowPeak.sorted.candidateRegions.bed \
 --genes example_chr22/reference/RefSeqCurated.170308.bed.CollapsedGeneBounds.chr22.bed \
@@ -39,28 +56,16 @@ python src/run.neighborhoods.py \
 --cellType K562 \
 --outdir example_chr22/ABC_output/Neighborhoods/ 
 
+#Preds
 python src/predict.py \
 --enhancers example_chr22/ABC_output/Neighborhoods/EnhancerList.txt \
 --genes example_chr22/ABC_output/Neighborhoods/GeneList.txt \
 --HiCdir example_chr22/input_data/HiC/raw/ \
 --hic_resolution 5000 \
 --scale_hic_using_powerlaw \
---threshold .016 \
+--threshold .02 \
 --cellType K562 \
 --outdir example_chr22/ABC_output/Predictions/ \
 --make_all_putative
 
-## HiC Section
-python src/juicebox_dump.py \
---hic_file https://hicfiles.s3.amazonaws.com/hiseq/k562/in-situ/combined_30.hic \
---juicebox "java -jar /seq/lincRNA/Software/juicer/GridEngine8/scripts/juicer_tools.jar" \
---outdir example_chr22/input_data/HiC/raw/ \
---chromosomes 22
 
-python src/compute_powerlaw_fit_from_hic.py \
---hicDir example_chr22/input_data/HiC/raw/ \
---outDir example_chr22/input_data/HiC/raw/powerlaw/ \
---maxWindow 1000000 \
---minWindow 5000 \
---resolution 5000 \
---chr 'chr22'
