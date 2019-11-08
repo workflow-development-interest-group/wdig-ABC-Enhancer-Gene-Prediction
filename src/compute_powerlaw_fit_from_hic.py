@@ -25,6 +25,7 @@ def parseargs():
     parser.add_argument('--resolution', default=5000, type=int, help="Resolution of hic dataset (in bp)")
     parser.add_argument('--minWindow', default=5000, type=int, help="Minimum distance between bins to include in powerlaw fit (bp). Recommended to be at least >= resolution to avoid using the diagonal of the HiC Matrix")
     parser.add_argument('--maxWindow', default=1000000, type=int, help="Maximum distance between bins to include in powerlaw fit (bp)")
+    parser.add_argument('--chr', default='all', help="Comma delimited list of chromosomes to use for fit. Defualts to chr[1..22],chrX")
 
     args = parser.parse_args()
     return(args)
@@ -49,9 +50,10 @@ def main():
     hic_mean_var.to_csv(os.path.join(args.outDir, 'hic.mean_var.txt'), sep='\t', index=True, header=True)
 
 def load_hic_juicebox(args):
-    chromosomes = ['chr' + str(x) for x in  list(range(1,23))] + ['chrX']
-    #chromosomes = ['chr22']
-    #file_list = glob.glob(os.path.join(args.hicDir,'chr*/chr*.KRobserved'))
+    if args.chr == 'all':
+        chromosomes = ['chr' + str(x) for x in  list(range(1,23))] + ['chrX']
+    else:
+        chromosomes = args.chr.split(',')
 
     all_data_list = []
     for chrom in chromosomes:

@@ -34,8 +34,8 @@ def get_model_argument_parser():
 
     #Power law
     parser.add_argument('--scale_hic_using_powerlaw', action="store_true", help="Scale Hi-C values using powerlaw relationship")
-    parser.add_argument('--hic_gamma', type=float, default=1, help="powerlaw exponent of hic data. Must be positive")
-    parser.add_argument('--hic_gamma_reference', type=float, default=1, help="powerlaw exponent to scale to. Must be positive")
+    parser.add_argument('--hic_gamma', type=float, default=.87, help="powerlaw exponent of hic data. Must be positive")
+    parser.add_argument('--hic_gamma_reference', type=float, default=.87, help="powerlaw exponent to scale to. Must be positive")
 
     #Genes to run through model
     parser.add_argument('--run_all_genes', action='store_true', help="Do not check for gene expression, make predictions for all genes")

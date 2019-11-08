@@ -49,3 +49,18 @@ python src/predict.py \
 --cellType K562 \
 --outdir example_chr22/ABC_output/Predictions/ \
 --make_all_putative
+
+## HiC Section
+python src/juicebox_dump.py \
+--hic_file https://hicfiles.s3.amazonaws.com/hiseq/k562/in-situ/combined_30.hic \
+--juicebox "java -jar /seq/lincRNA/Software/juicer/GridEngine8/scripts/juicer_tools.jar" \
+--outdir example_chr22/input_data/HiC/raw/ \
+--chromosomes 22
+
+python src/compute_powerlaw_fit_from_hic.py \
+--hicDir example_chr22/input_data/HiC/raw/ \
+--outDir example_chr22/input_data/HiC/raw/powerlaw/ \
+--maxWindow 1000000 \
+--minWindow 5000 \
+--resolution 5000 \
+--chr 'chr22'
