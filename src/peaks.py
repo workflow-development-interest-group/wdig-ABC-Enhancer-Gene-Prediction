@@ -73,7 +73,7 @@ def make_candidate_regions_from_peaks(macs_peaks, accessibility_file, genome_siz
     #use -sorted in intersect command? Not worth it, both files are small
     command = "bedtools sort -i {raw_counts_outfile} -faidx {genome_sizes} | bedtools merge -i stdin -c 4 -o max | sort -nr -k 4 | head -n {n_enhancers} |" + \
         "bedtools intersect -b stdin -a {macs_peaks} -wa |" + \
-        "awk '{{ length=$3-$2; if (length < {peak_extend}) {{ $2 = $2 - int((500-$length)/2); $3 = $3 + int((500-$length)/2) }} print $1 \"\\t\" $2 \"\\t\" $3}}' |" + \
+        "awk '{{ l=$3-$2; if (l < {peak_extend}) {{ $2 = $2 - int((500-l)/2); $3 = $3 + int((500-l)/2) }} print $1 \"\\t\" $2 \"\\t\" $3}}' |" + \
         "bedtools slop -i stdin -b {peak_extend} -g {genome_sizes} |" + \
         "bedtools sort -i stdin -faidx {genome_sizes} |" + \
         "bedtools merge -i stdin | " + \
