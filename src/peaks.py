@@ -73,8 +73,7 @@ def make_candidate_regions_from_peaks(macs_peaks, accessibility_file, genome_siz
     #use -sorted in intersect command? Not worth it, both files are small
     command = "bedtools sort -i {raw_counts_outfile} -faidx {genome_sizes} | bedtools merge -i stdin -c 4 -o max | sort -nr -k 4 | head -n {n_enhancers} |" + \
         "bedtools intersect -b stdin -a {macs_peaks} -wa |" + \
-        "awk '{{ l=$3-$2; if (l < {peak_extend}) {{ $2 = $2 - int((500-l)/2); $3 = $3 + int((500-l)/2) }} print $1 \"\\t\" $2 \"\\t\" $3}}' |" + \
-        "bedtools slop -i stdin -b {peak_extend} -g {genome_sizes} |" + \
+        "awk '{{ l=$3-$2; if (l < {peak_extend}) {{ $2 = $2 - int(({peak_extend}-l)/2); $3 = $3 + int(({peak_extend}-l)/2) }} print $1 \"\\t\" $2 \"\\t\" $3}}' |" + \
         "bedtools sort -i stdin -faidx {genome_sizes} |" + \
         "bedtools merge -i stdin | " + \
         blacklist_command + \
@@ -87,5 +86,7 @@ def make_candidate_regions_from_peaks(macs_peaks, accessibility_file, genome_siz
     print("Running: " + command)
     (stdoutdata, stderrdata) = p.communicate()
     err = str(stderrdata, 'utf-8')
+    if not err == '':
+        raise RuntimeError("Command failed.")
 
     return stdoutdata
