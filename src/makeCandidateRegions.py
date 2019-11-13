@@ -19,10 +19,11 @@ def parseargs(required_args=True):
     parser.add_argument('--narrowPeak', required=required_args, help="narrowPeak file output by macs2. Must include summits (--call-summits)")
     parser.add_argument('--bam', required=required_args, help="DNAase-Seq or ATAC-Seq bam file")
     parser.add_argument('--chrom_sizes', required=required_args, help="File listing chromosome size annotaions")
-    parser.add_argument('--outdir', required=required_args)
+    parser.add_argument('--outDir', required=required_args)
     
     parser.add_argument('--nStrongestPeaks', default=175000, help="Number of peaks to use for defining candidate regions")
     parser.add_argument('--peakExtendFromSummit', default=250, help="Number of base pairs to extend each preak from its summit")
+    parser.add_argument('--ignoreSummits', action="store_true", help="Compute peaks using the full peak regions, rather than extending from summit. In this case, peaks are expanded so that their minimum size is --peakExtendFromSummit")
 
     parser.add_argument('--regions_whitelist', default="", help="Bed file of regions to forcibly include in candidate enhancers. Overrides regions_blacklist")
     parser.add_argument('--regions_blacklist', default="", help="Bed file of regions to forcibly exclude from candidate enhancers")
@@ -31,18 +32,28 @@ def parseargs(required_args=True):
     return(args)
 
 def processCellType(args):
-	os.makedirs(os.path.join(args.outDir), exist_ok=True)
-	write_params(args, os.path.join(args.outDir, "params.txt"))
+    os.makedirs(os.path.join(args.outDir), exist_ok=True)
+    write_params(args, os.path.join(args.outDir, "params.txt"))
 
-	#Make candidate regions
-	make_candidate_regions_from_summits(macs_peaks = args.narrowPeak, 
-										accessibility_file = args.bam, 
-										genome_sizes = args.chrom_sizes, 
-										regions_whitelist = args.regions_whitelist,
-										regions_blacklist = args.regions_blacklist,
-										n_enhancers = args.nStrongestPeaks, 
-										peak_extend = args.peakExtendFromSummit, 
-										outdir = args.outDir)
+    #Make candidate regions
+    if not args.ignoreSummits:
+        make_candidate_regions_from_summits(macs_peaks = args.narrowPeak, 
+                                            accessibility_file = args.bam, 
+                                            genome_sizes = args.chrom_sizes, 
+                                            regions_whitelist = args.regions_whitelist,
+                                            regions_blacklist = args.regions_blacklist,
+                                            n_enhancers = args.nStrongestPeaks, 
+                                            peak_extend = args.peakExtendFromSummit, 
+                                            outdir = args.outDir)
+    else:
+        make_candidate_regions_from_peaks(macs_peaks = args.narrowPeak, 
+                                    accessibility_file = args.bam, 
+                                    genome_sizes = args.chrom_sizes, 
+                                    regions_whitelist = args.regions_whitelist,
+                                    regions_blacklist = args.regions_blacklist,
+                                    n_enhancers = args.nStrongestPeaks, 
+                                    peak_extend = args.peakExtendFromSummit, 
+                                    outdir = args.outDir)
 
 def main(args):
     processCellType(args)
