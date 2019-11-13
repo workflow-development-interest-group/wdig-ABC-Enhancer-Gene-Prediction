@@ -4,6 +4,7 @@ import argparse
 import os
 from peaks import *
 import traceback
+from tools import write_params
 
 def parseargs(required_args=True):
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
@@ -42,11 +43,6 @@ def processCellType(args):
 										n_enhancers = args.nStrongestPeaks, 
 										peak_extend = args.peakExtendFromSummit, 
 										outdir = args.outDir)
-
-def write_params(args, file):
-    with open(file, 'w') as outfile:
-        for arg in vars(args):
-            outfile.write("--" + arg + " " + str(getattr(args, arg)) + " ")
 
 def main(args):
     processCellType(args)
