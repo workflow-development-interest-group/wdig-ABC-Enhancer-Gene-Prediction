@@ -177,12 +177,8 @@ def load_enhancers(outdir=".",
                    class_override_file = None):
 
     enhancers = read_bed(candidate_peaks)
-<<<<<<< HEAD
-    enhancers = enhancers.loc[~ (enhancers.chr.str.contains(re.compile('random|chrM|_|hap|Un')))]
-=======
     enhancers['chr'] = enhancers['chr'].astype('str')
-    #enhancers = enhancers.ix[~ (enhancers.chr.str.contains(re.compile('random|chrM|_|hap|Un')))]
->>>>>>> master
+
 
     enhancers = count_features_for_bed(enhancers, candidate_peaks, genome_sizes, features, outdir, "Enhancers", skip_rpkm_quantile, force, use_fast_count)
 
