@@ -3,23 +3,28 @@ import scipy.sparse as ssp
 import pandas as pd
 import time, os
 
-def get_hic_file(chromosome, hic_dir, allow_vc=True):
-    hic_file = os.path.join(hic_dir, chromosome, chromosome + ".KRobserved.gz")
-    hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".KRnorm.gz")
+def get_hic_file(chromosome, hic_dir, allow_vc=True, hic_type="juicebox"):
+    if hic_type == "juicebox":
+        hic_file = os.path.join(hic_dir, chromosome, chromosome + ".KRobserved.gz")
+        hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".KRnorm.gz")
 
-    is_vc = False
-    if allow_vc and not hic_exists(hic_file):
-        hic_file = os.path.join(hic_dir, chromosome, chromosome + ".VCobserved.gz")
-        hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".VCnorm.gz")
+        is_vc = False
+        if allow_vc and not hic_exists(hic_file):
+            hic_file = os.path.join(hic_dir, chromosome, chromosome + ".VCobserved.gz")
+            hic_norm = os.path.join(hic_dir, chromosome, chromosome + ".VCnorm.gz")
 
-        if not hic_exists(hic_file):
-            RuntimeError("Could not find KR or VC normalized hic files")
-        else:
-            print("Could not find KR normalized hic file. Using VC normalized hic file")
-            is_vc = True
+            if not hic_exists(hic_file):
+                RuntimeError("Could not find KR or VC normalized hic files")
+            else:
+                print("Could not find KR normalized hic file. Using VC normalized hic file")
+                is_vc = True
 
-    print("Using: " + hic_file)
-    return hic_file, hic_norm, is_vc
+        print("Using: " + hic_file)
+        return hic_file, hic_norm, is_vc
+    elif hic_type == "bedpe":
+        hic_file = os.path.join(hic_dir, chromosome, chromosome + ".bedpe.gz")
+
+        return hic_file
 
 def hic_exists(file):
     if not os.path.exists(file):
@@ -47,7 +52,7 @@ def load_hic(hic_file, hic_norm_file, hic_is_vc, hic_type, hic_resolution, tss_h
                             apply_diagonal_bin_correction = apply_diagonal_bin_correction)
         #HiC = juicebox_to_bedpe(HiC, chromosome, args)
     elif hic_type == 'bedpe':
-        HiC = pd.read_csv(hic_file, sep="\t")
+        HiC = pd.read_csv(hic_file, sep="\t", names = ['chr1','x1','x2','chr2','y1','y2','hic_contact'])
 
     return HiC
 
