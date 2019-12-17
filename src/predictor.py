@@ -10,7 +10,7 @@ def make_predictions(chromosome, enhancers, genes, args):
     pred = make_pred_table(chromosome, enhancers, genes, args)
     pred = annotate_predictions(pred, args.tss_slop)
 
-    hic_file, hic_norm_file, hic_is_vc = get_hic_file(chromosome, args.HiCdir)
+    hic_file, hic_norm_file, hic_is_vc = get_hic_file(chromosome, args.HiCdir, hic_type = args.hic_type)
     pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, hic_norm_file, hic_is_vc, chromosome, args)
 
     pred = compute_score(pred, [pred['activity_base'], pred['hic_contact_pl_scaled_adj']], "ABC")
