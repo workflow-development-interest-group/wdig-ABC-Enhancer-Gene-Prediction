@@ -75,8 +75,8 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, hic_norm_file, hic_is_
         #Then remerge on hic index
 
         HiC['hic_idx'] = HiC.index
-        hic1 = df_to_pyranges(HiC, start_col='x1', end_col='x2')
-        hic2 = df_to_pyranges(HiC, start_col='y1', end_col='y2')
+        hic1 = df_to_pyranges(HiC, start_col='x1', end_col='x2', chr_col='chr1')
+        hic2 = df_to_pyranges(HiC, start_col='y1', end_col='y2', chr_col='chr2')
 
         #Overlap in one direction
         enh_hic1 = df_to_pyranges(enh, start_col = 'enh_midpoint', end_col = 'enh_midpoint', end_slop = 1).join(hic1).df

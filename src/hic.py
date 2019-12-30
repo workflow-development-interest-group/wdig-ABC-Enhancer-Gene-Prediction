@@ -24,7 +24,7 @@ def get_hic_file(chromosome, hic_dir, allow_vc=True, hic_type="juicebox"):
     elif hic_type == "bedpe":
         hic_file = os.path.join(hic_dir, chromosome, chromosome + ".bedpe.gz")
 
-        return hic_file
+        return hic_file, None, None
 
 def hic_exists(file):
     if not os.path.exists(file):
