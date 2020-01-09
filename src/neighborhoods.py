@@ -130,7 +130,7 @@ def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None, fail_on_nonuni
     bed = pd.concat([bed, names], axis=1)
 
     bed['name'] = bed[main_name]
-    bed = bed.sort_values(by=['chr','start'])
+    #bed = bed.sort_values(by=['chr','start']) #JN Keep original sort order
 
     bed['tss'] = get_tss_for_bed(bed)
 
@@ -457,7 +457,7 @@ def average_features(df, feature, feature_bam_list, skip_rpkm_quantile):
 bed_extra_colnames = ["name", "score", "strand", "thickStart", "thickEnd", "itemRgb", "blockCount", "blockSizes", "blockStarts"]
 #JN: 9/13/19: Don't assume chromosomes start with 'chr'
 #chromosomes = ['chr' + str(entry) for entry in list(range(1,23)) + ['M','X','Y']]   # should pass this in as an input file to specify chromosome order
-def read_bed(filename, extra_colnames=bed_extra_colnames, chr=None, sort=False, skip_chr_sorting=False):
+def read_bed(filename, extra_colnames=bed_extra_colnames, chr=None, sort=False, skip_chr_sorting=True):
     skip = 1 if ("track" in open(filename, "r").readline()) else 0
     names = ["chr", "start", "end"] + extra_colnames
     result = pd.read_table(filename, names=names, header=None, skiprows=skip, comment='#')
