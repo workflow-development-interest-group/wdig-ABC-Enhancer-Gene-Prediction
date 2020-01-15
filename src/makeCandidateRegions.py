@@ -22,8 +22,9 @@ def parseargs(required_args=True):
     parser.add_argument('--outDir', required=required_args)
     
     parser.add_argument('--nStrongestPeaks', default=175000, help="Number of peaks to use for defining candidate regions")
-    parser.add_argument('--peakExtendFromSummit', default=250, help="Number of base pairs to extend each preak from its summit")
-    parser.add_argument('--ignoreSummits', action="store_true", help="Compute peaks using the full peak regions, rather than extending from summit. In this case, peaks are expanded so that their minimum size is --peakExtendFromSummit")
+    parser.add_argument('--peakExtendFromSummit', default=250, help="Number of base pairs to extend each preak from its summit (or from both ends of region if using --ignoreSummits)")
+    parser.add_argument('--ignoreSummits', action="store_true", help="Compute peaks using the full peak regions, rather than extending from summit.")
+    parser.add_argument('--minPeakWidth', default=500, help="Candidate regions whose width is below this threshold are expanded to this width. Only used with --ignoreSummits")
 
     parser.add_argument('--regions_whitelist', default="", help="Bed file of regions to forcibly include in candidate enhancers. Overrides regions_blacklist")
     parser.add_argument('--regions_blacklist', default="", help="Bed file of regions to forcibly exclude from candidate enhancers")
@@ -53,6 +54,7 @@ def processCellType(args):
                                     regions_blacklist = args.regions_blacklist,
                                     n_enhancers = args.nStrongestPeaks, 
                                     peak_extend = args.peakExtendFromSummit, 
+                                    minPeakWidth = args.minPeakWidth,
                                     outdir = args.outDir)
 
 def main(args):

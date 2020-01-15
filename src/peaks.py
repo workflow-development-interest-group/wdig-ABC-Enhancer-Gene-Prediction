@@ -48,10 +48,8 @@ def make_candidate_regions_from_summits(macs_peaks, accessibility_file, genome_s
     return stdoutdata
 
 
-def make_candidate_regions_from_peaks(macs_peaks, accessibility_file, genome_sizes, regions_whitelist, regions_blacklist, n_enhancers, peak_extend, outdir):
-    ## Generate enhancer regions from MACS summits
-    # 1. Count reads in DHS peaks
-    # 2. Take top N regions, get summits, extend summits, merge
+def make_candidate_regions_from_peaks(macs_peaks, accessibility_file, genome_sizes, regions_whitelist, regions_blacklist, n_enhancers, peak_extend, minPeakWidth, outdir):
+    ## Generate enhancer regions from MACS narrowPeak - do not use summits
 
     outfile = os.path.join(outdir, os.path.basename(macs_peaks) + ".candidateRegions.bed")
     raw_counts_outfile = os.path.join(outdir, os.path.basename(macs_peaks) + os.path.basename(accessibility_file) + ".Counts.bed")
@@ -73,7 +71,8 @@ def make_candidate_regions_from_peaks(macs_peaks, accessibility_file, genome_siz
     #use -sorted in intersect command? Not worth it, both files are small
     command = "bedtools sort -i {raw_counts_outfile} -faidx {genome_sizes} | bedtools merge -i stdin -c 4 -o max | sort -nr -k 4 | head -n {n_enhancers} |" + \
         "bedtools intersect -b stdin -a {macs_peaks} -wa |" + \
-        "awk '{{ l=$3-$2; if (l < {peak_extend}) {{ $2 = $2 - int(({peak_extend}-l)/2); $3 = $3 + int(({peak_extend}-l)/2) }} print $1 \"\\t\" $2 \"\\t\" $3}}' |" + \
+        "bedtools slop -i stdin -b {peak_extend} -g {genome_sizes} |" + \
+        "awk '{{ l=$3-$2; if (l < {minPeakWidth}) {{ $2 = $2 - int(({minPeakWidth}-l)/2); $3 = $3 + int(({minPeakWidth}-l)/2) }} print $1 \"\\t\" $2 \"\\t\" $3}}' |" + \
         "bedtools sort -i stdin -faidx {genome_sizes} |" + \
         "bedtools merge -i stdin | " + \
         blacklist_command + \
