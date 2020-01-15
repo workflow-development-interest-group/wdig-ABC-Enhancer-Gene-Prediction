@@ -497,6 +497,7 @@ def count_tagalign_total(tagalign):
     return result
 
 def count_bigwig_total(bw_file):
+    from pyBigWig import open as open_bigwig
     bw = open_bigwig(bw_file)
     result = sum(l * bw.stats(ch, 0, l, "mean")[0] for ch, l in bw.chroms().items())
     assert (abs(result) > 0)  ## BigWig could have negative values, e.g. the negative-strand GroCAP bigwigs
