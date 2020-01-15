@@ -1,5 +1,6 @@
 import argparse
 import subprocess
+from tools import run_command
 
 def parseargs():
     parser = argparse.ArgumentParser(description='Download and dump HiC data')
@@ -9,6 +10,7 @@ def parseargs():
     parser.add_argument('--outdir', default=".")
     parser.add_argument('--include_raw', action="store_true", help="Download raw matrix in addtion to KR")
     parser.add_argument('--chromosomes', default="all", help="comma delimited list of chromosomes to download")
+    parser.add_argument('--skip_gzip', action="store_true", help="dont gzip hic files")
 
     return parser.parse_args()
 
@@ -29,17 +31,23 @@ def main(args):
         command = args.juicebox + " dump observed KR {0} {1} {1} BP {3} {2}/chr{1}.KRobserved".format(args.hic_file, chromosome, outdir, args.resolution)
         print(command)
         out = subprocess.getoutput(command)
+        if not args.skip_gzip: 
+            run_command("gzip {0}/chr{1}.KRobserved".format(outdir, chromosome))
 
         ## Download KR norm file
         command = args.juicebox + " dump norm KR {0} {1} BP {3} {2}/chr{1}.KRnorm".format(args.hic_file, chromosome, outdir, args.resolution)
         out = subprocess.getoutput(command)
-        print(out)
+        print(command)
+        if not args.skip_gzip: 
+            run_command("gzip {0}/chr{1}.KRnorm".format(outdir, chromosome))
         
         if args.include_raw:
-	        ## Download raw observed matrix
-	        command = args.juicebox + " dump observed NONE {0} {1} {1} BP {3} {2}/chr{1}.RAWobserved".format(args.hic_file, chromosome, outdir, args.resolution)
-	        print(command)
-	        out = subprocess.getoutput(command)
+            ## Download raw observed matrix
+            command = args.juicebox + " dump observed NONE {0} {1} {1} BP {3} {2}/chr{1}.RAWobserved".format(args.hic_file, chromosome, outdir, args.resolution)
+            print(command)
+            out = subprocess.getoutput(command)
+            if not args.skip_gzip:
+                run_command("gzip {0}/chr{1}.RAWobserved".format(outdir, chromosome))
 
 if __name__ == '__main__':
     args = parseargs()
