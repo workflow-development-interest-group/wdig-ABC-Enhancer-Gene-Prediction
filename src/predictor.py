@@ -135,12 +135,15 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, hic_norm_file, hic_is_
 def scale_with_powerlaw(pred, args):
     #Scale hic values to
 
+    powerlaw_estimate = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
+    pred['powerlaw_contact'] = powerlaw_estimate
+
     if not args.scale_hic_using_powerlaw:
+        powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
+        pred['powerlaw_contact_reference'] = powerlaw_estimate_reference
         pred['hic_contact_pl_scaled'] = pred['hic_contact']
     else:
-        powerlaw_estimate = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
         powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma_reference)
-        pred['powerlaw_contact'] = powerlaw_estimate
         pred['powerlaw_contact_reference'] = powerlaw_estimate_reference
         pred['hic_contact_pl_scaled'] = pred['hic_contact'] * (powerlaw_estimate_reference / powerlaw_estimate)
 
