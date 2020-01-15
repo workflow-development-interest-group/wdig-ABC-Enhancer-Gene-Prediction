@@ -9,11 +9,14 @@ from hic import *
 def make_predictions(chromosome, enhancers, genes, args):
     pred = make_pred_table(chromosome, enhancers, genes, args)
     pred = annotate_predictions(pred, args.tss_slop)
+    pred = add_powerlaw_to_predictions(pred, args)
 
-    hic_file, hic_norm_file, hic_is_vc = get_hic_file(chromosome, args.HiCdir, hic_type = args.hic_type)
-    pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, hic_norm_file, hic_is_vc, chromosome, args)
-
-    pred = compute_score(pred, [pred['activity_base'], pred['hic_contact_pl_scaled_adj']], "ABC")
+    #if Hi-C directory is not provided, only powerlaw model will be computed
+    if args.HiCdir:
+        hic_file, hic_norm_file, hic_is_vc = get_hic_file(chromosome, args.HiCdir, hic_type = args.hic_type)
+        pred = add_hic_to_enh_gene_table(enhancers, genes, pred, hic_file, hic_norm_file, hic_is_vc, chromosome, args)
+        pred = compute_score(pred, [pred['activity_base'], pred['hic_contact_pl_scaled_adj']], "ABC")
+    
     pred = compute_score(pred, [pred['activity_base'], pred['powerlaw_contact_reference']], "powerlaw")
 
     return pred
@@ -122,7 +125,7 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, hic_norm_file, hic_is_
     print('HiC added to predictions table. Elapsed time: {}'.format(time.time() - t))
 
     # Add powerlaw scaling
-    pred = scale_with_powerlaw(pred, args)
+    pred = scale_hic_with_powerlaw(pred, args)
 
     #Add pseudocount
     pred = add_hic_pseudocount(pred, args)
@@ -132,22 +135,28 @@ def add_hic_to_enh_gene_table(enh, genes, pred, hic_file, hic_norm_file, hic_is_
 
     return(pred)
 
-def scale_with_powerlaw(pred, args):
-    #Scale hic values to
+def scale_hic_with_powerlaw(pred, args):
+    #Scale hic values to reference powerlaw
 
-    powerlaw_estimate = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
-    pred['powerlaw_contact'] = powerlaw_estimate
+    # powerlaw_estimate = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
+    # pred['powerlaw_contact'] = powerlaw_estimate
 
     if not args.scale_hic_using_powerlaw:
-        powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
-        pred['powerlaw_contact_reference'] = powerlaw_estimate_reference
+        #powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
+        #pred['powerlaw_contact_reference'] = powerlaw_estimate_reference
         pred['hic_contact_pl_scaled'] = pred['hic_contact']
     else:
-        powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma_reference)
-        pred['powerlaw_contact_reference'] = powerlaw_estimate_reference
-        pred['hic_contact_pl_scaled'] = pred['hic_contact'] * (powerlaw_estimate_reference / powerlaw_estimate)
+        #powerlaw_estimate_reference = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma_reference)
+        #pred['powerlaw_contact_reference'] = powerlaw_estimate_reference
+        pred['hic_contact_pl_scaled'] = pred['hic_contact'] * (pred['powerlaw_contact_reference'] / pred['powerlaw_contact'])
 
     return(pred)
+
+def add_powerlaw_to_predictions(pred, args):
+    pred['powerlaw_contact'] = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma)
+    pred['powerlaw_contact_reference'] = get_powerlaw_at_distance(pred['distance'].values, args.hic_gamma_reference)
+
+    return pred
 
 def add_hic_pseudocount(pred, args):
     # Add a pseudocount based on the powerlaw expected count at a given distance
@@ -187,7 +196,7 @@ def annotate_predictions(pred, tss_slop=500):
     return(pred)
 
 def make_gene_prediction_stats(pred, args):
-    summ1 = pred.groupby(['chr','TargetGene','TargetGeneTSS']).agg({'TargetGeneIsExpressed' : lambda x: set(x).pop(), 'ABC.Score' : lambda x: all(np.isnan(x)) ,  'name' : 'count'})
+    summ1 = pred.groupby(['chr','TargetGene','TargetGeneTSS']).agg({'TargetGeneIsExpressed' : lambda x: set(x).pop(), args.score_column : lambda x: all(np.isnan(x)) ,  'name' : 'count'})
     summ1.columns = ['geneIsExpressed', 'geneFailed','nEnhancersConsidered']
 
     summ2 = pred.loc[pred['class'] != 'promoter',:].groupby(['chr','TargetGene','TargetGeneTSS']).agg({args.score_column : lambda x: sum(x > args.threshold)})

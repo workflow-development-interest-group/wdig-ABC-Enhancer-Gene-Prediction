@@ -25,7 +25,7 @@ def get_model_argument_parser():
 
     #hic
     #To do: validate params
-    parser.add_argument('--HiCdir', help="HiC directory")
+    parser.add_argument('--HiCdir', default=None, help="HiC directory")
     parser.add_argument('--hic_resolution', type=int, help="HiC resolution")
     parser.add_argument('--tss_hic_contribution', type=float, default=100, help="Weighting of diagonal bin of hic matrix as a percentage of the maximum of its neighboring bins")
     parser.add_argument('--hic_pseudocount_distance', type=int, default=1e6, help="A pseudocount is added equal to the powerlaw fit at this distance")
@@ -134,8 +134,11 @@ def main():
     print("Done.")
     
 def validate_args(args):
-    if args.hic_type == 'juicebox':
+    if args.HiCdir and args.hic_type == 'juicebox':
         assert args.hic_resolution is not None, 'HiC resolution must be provided if hic_type is juicebox'
+
+    if not args.HiCdir:
+        print("WARNING: Hi-C directory not provided. Model will only compute ABC score using powerlaw!")
 
 if __name__ == '__main__':
     main()
