@@ -22,7 +22,7 @@ def parseargs():
     readable = argparse.FileType('r')
     parser.add_argument('--hicDir', help="Directory containing observed HiC KR normalized matrices. File naming and structure should be: hicDir/chr*/chr*.KRobserved")
     parser.add_argument('--outDir', help="Output directory")
-    parser.add_argument('--hic_type', help="Output directory")
+    parser.add_argument('--hic_type', default = 'juicebox', choices=['juicebox','bedpe'], help="format of hic files")
     parser.add_argument('--resolution', default=5000, type=int, help="For Juicebox: resolution of hic dataset (in bp). For bedpe: distances will be binned to this resolution for powerlaw fit")
     parser.add_argument('--minWindow', default=5000, type=int, help="Minimum distance between bins to include in powerlaw fit (bp). Recommended to be at least >= resolution to avoid using the diagonal of the HiC Matrix")
     parser.add_argument('--maxWindow', default=1000000, type=int, help="Maximum distance between bins to include in powerlaw fit (bp)")
