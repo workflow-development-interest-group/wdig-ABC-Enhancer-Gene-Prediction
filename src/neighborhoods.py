@@ -80,25 +80,9 @@ def annotate_genes_with_features(genes,
            default_accessibility_feature = "",
            **kwargs):
 
-    #file = genome['genes']
-    #genome_sizes = genome['sizes']
+    #Setup files for counting
     bounds_bed = os.path.join(outdir, "GeneList.bed")
-    #tss1kb_file = file + '.TSS1kb.bed'
-
-    #Make bed file with TSS +/- 500bp
-    #tss1kb = genes.ix[:,['chr','start','end','name','score','strand']]
-    tss1kb = genes.loc[:,['chr','start','end','name','score','strand']]
-    tss1kb['start'] = genes['tss'] - 500
-    tss1kb['end'] = genes['tss'] + 500
-    tss1kb_file = os.path.join(outdir, "GeneList.TSS1kb.bed")
-    tss1kb.to_csv(tss1kb_file, header=False, index=False, sep='\t')
-
-    #The TSS1kb file should be sorted
-    sort_command = "bedtools sort -faidx {genome_sizes} -i {tss1kb_file} > {tss1kb_file}.sorted; mv {tss1kb_file}.sorted {tss1kb_file}; rm {tss1kb_file}.sorted".format(**locals())
-    p = Popen(sort_command, stdout=PIPE, stderr=PIPE, shell=True)
-    print("Sorting Genes.TSS1kb file. \n Running: " + sort_command + "\n")
-    (stdoutdata, stderrdata) = p.communicate()
-    err = str(stderrdata, 'utf-8')
+    make_tss_region_file(genes, outdir, genome_sizes)
 
     #Count features over genes and promoters
     genes = count_features_for_bed(genes, bounds_bed, genome_sizes, features, outdir, "Genes", force=force, use_fast_count=use_fast_count)
@@ -114,6 +98,25 @@ def annotate_genes_with_features(genes,
              sep='\t', index=False, header=True, float_format="%.6f")
 
     return merged
+
+def make_tss_region_file(genes, outdir, sizes, tss_slop=500):
+    #Given a gene file, define 1kb regions around the tss of each gene
+
+    sizes = df_to_pyranges(read_bed(sizes + '.bed'))
+    tss1kb = genes.loc[:,['chr','start','end','name','score','strand']]
+    tss1kb['start'] = genes['tss']
+    tss1kb['end'] = genes['tss']
+    tss1kb = df_to_pyranges(tss1kb).slack(tss_slop)
+    tss1kb = pr.gf.genome_bounds(tss1kb, sizes).df[['Chromosome','Start','End','name','score','strand']]
+    tss1kb_file = os.path.join(outdir, "GeneList.TSS1kb.bed")
+    tss1kb.to_csv(tss1kb_file, header=False, index=False, sep='\t')
+
+    #The TSS1kb file should be sorted
+    sort_command = "bedtools sort -faidx {sizes} -i {tss1kb_file} > {tss1kb_file}.sorted; mv {tss1kb_file}.sorted {tss1kb_file}; rm {tss1kb_file}.sorted".format(**locals())
+    p = Popen(sort_command, stdout=PIPE, stderr=PIPE, shell=True)
+    print("Sorting Genes.TSS1kb file. \n Running: " + sort_command + "\n")
+    (stdoutdata, stderrdata) = p.communicate()
+    err = str(stderrdata, 'utf-8')
 
 def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None, fail_on_nonunique=True):
 
