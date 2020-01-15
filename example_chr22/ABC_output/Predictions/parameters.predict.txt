@@ -1,11 +1,11 @@
-enhancers example_chr22/ABC_output/Neighborhoods/EnhancerList.txt
-genes example_chr22/ABC_output/Neighborhoods/GeneList.txt
-outdir example_chr22/ABC_output/Predictions/
+enhancers /seq/lincRNA/RAP/Promoters/ABC-Enhancer-Gene-Prediction/example_chr22/ABC_output//Neighborhoods/EnhancerList.txt
+genes /seq/lincRNA/RAP/Promoters/ABC-Enhancer-Gene-Prediction/example_chr22/ABC_output//Neighborhoods/GeneList.txt
+outdir /seq/lincRNA/RAP/Promoters/ABC-Enhancer-Gene-Prediction/example_chr22/ABC_output//Predictions/
 window 5000000
 score_column ABC.Score
 threshold 0.02
 cellType K562
-HiCdir example_chr22/input_data/HiC/raw/
+HiCdir /seq/lincRNA/RAP/Promoters/ABC-Enhancer-Gene-Prediction//example_chr22/input_data/HiC/raw/
 hic_resolution 5000
 tss_hic_contribution 100
 hic_pseudocount_distance 1000000.0
