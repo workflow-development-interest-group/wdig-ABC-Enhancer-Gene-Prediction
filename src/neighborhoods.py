@@ -219,27 +219,31 @@ def assign_enhancer_classes(enhancers, genes, tss_slop=500):
     def get_class_pyranges(enhancers, tss_pyranges = tss_pyranges, gene_pyranges = gene_pyranges): 
         '''
         Takes in PyRanges objects : Enhancers, tss_pyranges, gene_pyranges
-        Returns dataframe with cluster id (representing enhancer) and symbol of the gene/promoter that is overlapped'''
+        Returns dataframe with  uid (representing enhancer) and symbol of the gene/promoter that is overlapped'''
 
         #genes
         genic_enh = enhancers.join(gene_pyranges, suffix="_genic")
-        genic_enh = genic_enh.df[['symbol','Cluster']].groupby('Cluster',as_index=False).aggregate(lambda x: ','.join(list(set(x))))
+        genic_enh = genic_enh.df[['symbol','uid']].groupby('uid',as_index=False).aggregate(lambda x: ','.join(list(set(x))))
         
         #promoters
         promoter_enh = enhancers.join(tss_pyranges, suffix="_promoter")
-        promoter_enh = promoter_enh.df[['symbol','Cluster']].groupby('Cluster',as_index=False).aggregate(lambda x: ','.join(list(set(x))))
+        promoter_enh = promoter_enh.df[['symbol','uid']].groupby('uid',as_index=False).aggregate(lambda x: ','.join(list(set(x))))
         
         return genic_enh, promoter_enh
 
+    # import pdb
+    # pdb.Pdb(stdout=sys.__stdout__).set_trace()
+    # pdb.set_trace()
+
     # label everything as intergenic
     enhancers["class"] = "intergenic"
-    enh = df_to_pyranges(enhancers).cluster()
-    # use clustering as unique identifier for each enhancer region
-    # enh = enhancer.cluster()  
+    enhancers['uid'] = range(enhancers.shape[0])
+    enh = df_to_pyranges(enhancers)
+ 
     genes, promoters = get_class_pyranges(enh)
     enhancers = enh.df.drop(['Chromosome','Start','End'], axis=1)
-    enhancers.loc[enhancers['Cluster'].isin(genes.Cluster), 'class'] = 'genic'
-    enhancers.loc[enhancers['Cluster'].isin(promoters.Cluster), 'class'] = 'promoter' 
+    enhancers.loc[enhancers['uid'].isin(genes.uid), 'class'] = 'genic'
+    enhancers.loc[enhancers['uid'].isin(promoters.uid), 'class'] = 'promoter' 
     
     enhancers["isPromoterElement"] = enhancers["class"] == "promoter"
     enhancers["isGenicElement"] = enhancers["class"] == "genic"
@@ -252,9 +256,9 @@ def assign_enhancer_classes(enhancers, genes, tss_slop=500):
     print("         Intergenic: {}".format(sum(enhancers['isIntergenicElement'])))
 
     #Add promoter/genic symbol
-    enhancers = enhancers.merge(promoters.rename(columns={'symbol':'promoterSymbol'}), on='Cluster', how = 'left').fillna(value={'promoterSymbol':""})
-    enhancers = enhancers.merge(genes.rename(columns={'symbol':'genicSymbol'}), on='Cluster', how = 'left').fillna(value={'genicSymbol':""})
-    enhancers.drop(['Cluster'], axis=1, inplace=True)
+    enhancers = enhancers.merge(promoters.rename(columns={'symbol':'promoterSymbol'}), on='uid', how = 'left').fillna(value={'promoterSymbol':""})
+    enhancers = enhancers.merge(genes.rename(columns={'symbol':'genicSymbol'}), on='uid', how = 'left').fillna(value={'genicSymbol':""})
+    enhancers.drop(['uid'], axis=1, inplace=True)
 
     # just to keep things consistent with original code 
     enhancers["name"] = enhancers.apply(lambda e: "{}|{}:{}-{}".format(e["class"], e.chr, e.start, e.end), axis=1)
