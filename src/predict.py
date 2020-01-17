@@ -48,6 +48,7 @@ def get_model_argument_parser():
 
     #Other
     parser.add_argument('--tss_slop', type=int, default=500, help="Distance from tss to search for self-promoters")
+    parser.add_argument('--chromosomes', default="all", help="chromosomes to make predictions for. Defaults to intersection of all chromosomes in --genes and --enhancers")
     parser.add_argument('--include_chrY', '-y', action='store_true', help="Make predictions on Y chromosome")
 
     return parser
@@ -89,9 +90,12 @@ def main():
     all_putative_list = []
 
     #Make predictions
-    chromosomes = set(genes['chr']).intersection(set(enhancers['chr'])) 
-    if not args.include_chrY:
-        chromosomes.discard('chrY')
+    if args.chromosomes == "all":
+        chromosomes = set(genes['chr']).intersection(set(enhancers['chr'])) 
+        if not args.include_chrY:
+            chromosomes.discard('chrY')
+    else:
+        chromosomes = args.chromosomes.split(",")
 
     for chromosome in chromosomes:
         print('Making predictions for chromosome: {}'.format(chromosome))
