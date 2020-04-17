@@ -93,7 +93,12 @@ def annotate_genes_with_features(genes,
     merged = genes.merge(tsscounts, on="name", suffixes=['','.TSS1Kb'])
 
     access_col = default_accessibility_feature + ".RPKM.quantile.TSS1Kb"  
-    merged['PromoterActivityQuantile'] = ((0.0001+merged['H3K27ac.RPKM.quantile.TSS1Kb'])*(0.0001+merged[access_col])).rank(method='average', na_option="top", ascending=True, pct=True)
+
+    if 'H3K27ac.RPKM.quantile.TSS1Kb' in merged.columns:
+        merged['PromoterActivityQuantile'] = ((0.0001+merged['H3K27ac.RPKM.quantile.TSS1Kb'])*(0.0001+merged[access_col])).rank(method='average', na_option="top", ascending=True, pct=True)
+    else:
+        merged['PromoterActivityQuantile'] = ((0.0001+merged[access_col])).rank(method='average', na_option="top", ascending=True, pct=True)
+
 
     merged.to_csv(os.path.join(outdir, "GeneList.txt"),
              sep='\t', index=False, header=True, float_format="%.6f")
@@ -544,7 +549,9 @@ def parse_params_file(args):
 
 def get_features(args):
     features = {}
-    features['H3K27ac'] = args.H3K27ac.split(",")
+
+    if args.H3K27ac:
+        features['H3K27ac'] = args.H3K27ac.split(",")
     
     if args.ATAC:
         features['ATAC'] = args.ATAC.split(",")
@@ -573,11 +580,19 @@ def determine_accessibility_feature(args):
 
 def compute_activity(df, access_col):
     if access_col == "DHS":
-        df['activity_base'] = np.sqrt(df['normalized_h3K27ac'] * df['normalized_dhs'])
-        df['activity_base_no_qnorm'] = np.sqrt(df['H3K27ac.RPM'] * df['DHS.RPM'])
+        if 'H3K27ac.RPM' in df.columns:
+            df['activity_base'] = np.sqrt(df['normalized_h3K27ac'] * df['normalized_dhs'])
+            df['activity_base_no_qnorm'] = np.sqrt(df['H3K27ac.RPM'] * df['DHS.RPM'])
+        else:
+            df['activity_base'] = df['normalized_dhs']
+            df['activity_base_no_qnorm'] = df['DHS.RPM']
     elif access_col == "ATAC":
-        df['activity_base'] = np.sqrt(df['normalized_h3K27ac'] * df['normalized_atac'])
-        df['activity_base_no_qnorm'] = np.sqrt(df['H3K27ac.RPM'] * df['ATAC.RPM'])
+        if 'H3K27ac.RPM' in df.columns:
+            df['activity_base'] = np.sqrt(df['normalized_h3K27ac'] * df['normalized_atac'])
+            df['activity_base_no_qnorm'] = np.sqrt(df['H3K27ac.RPM'] * df['ATAC.RPM'])
+        else:
+            df['activity_base'] = df['normalized_atac']
+            df['activity_base_no_qnorm'] = df['ATAC.RPM']
     else:
         raise RuntimeError("At least one of ATAC or DHS must be provided!")
 
@@ -589,7 +604,7 @@ def run_qnorm(df, qnorm, qnorm_method = "rank", separate_promoters = True):
     # Option to qnorm promoters and nonpromoters separately
 
     if qnorm is None:
-        df['normalized_h3K27ac'] = df['H3K27ac.RPM']
+        if 'H3K27ac.RPM' in df.columns: df['normalized_h3K27ac'] = df['H3K27ac.RPM']
         if 'DHS.RPM' in df.columns: df['normalized_dhs'] = df['DHS.RPM']
         if 'ATAC.RPM' in df.columns: df['normalized_atac'] = df['ATAC.RPM']
     else:

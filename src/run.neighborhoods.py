@@ -25,7 +25,7 @@ def parseargs(required_args=True):
     parser.add_argument('--skip_gene_counts', action="store_true", help="Do not count over genes or gene bodies. Will not produce GeneList.txt. Do not use switch if intending to run Predictions")
 
     #epi 
-    parser.add_argument('--H3K27ac', required=required_args, default=None, help="Comma delimited string of H3K27ac .bam files")
+    parser.add_argument('--H3K27ac', default="", nargs='?', help="Comma delimited string of H3K27ac .bam files")
     parser.add_argument('--DHS', default="", nargs='?', help="Comma delimited string of DHS .bam files. Either ATAC or DHS must be provided")
     parser.add_argument('--ATAC', default="", nargs='?', help="Comma delimited string of ATAC .bam files. Either ATAC or DHS must be provided")
     parser.add_argument('--default_accessibility_feature', default=None, nargs='?', help="If both ATAC and DHS are provided, this flag must be set to either 'DHS' or 'ATAC' signifying which datatype to use in computing activity")
