@@ -22,6 +22,7 @@ def parseargs(required_args=True):
     parser.add_argument('--ubiquitously_expressed_genes', default=None, help="File listing ubiquitously expressed genes. These will be flagged by the model, but this annotation does not affect model predictions")
     parser.add_argument('--gene_name_annotations', default="symbol", help="Comma delimited string of names corresponding to the gene identifiers present in the name field of the gene annotation bed file")
     parser.add_argument('--primary_gene_identifier', default="symbol", help="Primary identifier used to identify genes. Must be present in gene_name_annotations. The primary identifier must be unique")
+    parser.add_argument('--skip_gene_counts', action="store_true", help="Do not count over genes or gene bodies. Will not produce GeneList.txt. Do not use switch if intending to run Predictions")
 
     #epi 
     parser.add_argument('--H3K27ac', required=required_args, default=None, help="Comma delimited string of H3K27ac .bam files")
@@ -64,12 +65,13 @@ def processCellType(args):
                                                 cellType = args.cellType,
                                                 class_gene_file = args.genes_for_class_assignment)
 
-    annotate_genes_with_features(genes = genes, 
-                                    genome_sizes = args.chrom_sizes, 
-                                    use_fast_count = (not args.use_secondary_counting_method),
-                                    default_accessibility_feature = params['default_accessibility_feature'],
-                                    features = params['features'],
-                                    outdir = args.outdir)
+    if not args.skip_gene_counts:
+        annotate_genes_with_features(genes = genes, 
+                                        genome_sizes = args.chrom_sizes, 
+                                        use_fast_count = (not args.use_secondary_counting_method),
+                                        default_accessibility_feature = params['default_accessibility_feature'],
+                                        features = params['features'],
+                                        outdir = args.outdir)
 
     #Setup Candidate Enhancers
     load_enhancers(genes=genes_for_class_assignment, 
