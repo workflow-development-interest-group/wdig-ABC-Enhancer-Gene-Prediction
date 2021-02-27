@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 
-def parse_args()
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--all_putative')
     parser.add_argument('--score_column', default="ABC.Score")
