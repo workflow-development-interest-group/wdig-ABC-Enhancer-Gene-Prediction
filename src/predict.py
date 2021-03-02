@@ -1,7 +1,6 @@
 import argparse
 from predictor import *
 from tools import *
-from metrics import *
 import pandas as pd
 import numpy as np
 import sys, traceback, os, os.path
