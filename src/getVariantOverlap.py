@@ -27,7 +27,7 @@ def test_variant_overlap(args, all_putative):
     variant_overlap.to_csv(variant_overlap_file+".tmp", sep="\t", index=False, header=True, compression="gzip", float_format="%.6f")
     # shrink regions
     os.system("zcat {}.tmp | head -1 | gzip > {}".format(variant_overlap_file, variant_overlap_file))
-    os.system("zcat {}.tmp | sed 1d | bedtools slop -b -150 -g {} | gzip -c >> {}".format(variant_overlap_file, args.chrom_sizes, variant_overlap_file))
+    os.system("zcat {}.tmp | sed 1d | bedtools slop -b -150 -g {} | gzip >> {}".format(variant_overlap_file, args.chrom_sizes, variant_overlap_file))
 
     print("Done.")
 
