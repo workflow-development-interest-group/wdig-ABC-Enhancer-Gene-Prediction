@@ -26,8 +26,8 @@ def parseargs(required_args=True):
     parser.add_argument('--ignoreSummits', action="store_true", help="Compute peaks using the full peak regions, rather than extending from summit.")
     parser.add_argument('--minPeakWidth', default=500, help="Candidate regions whose width is below this threshold are expanded to this width. Only used with --ignoreSummits")
 
-    parser.add_argument('--regions_whitelist', default="", help="Bed file of regions to forcibly include in candidate enhancers. Overrides regions_blacklist")
-    parser.add_argument('--regions_blacklist', default="", help="Bed file of regions to forcibly exclude from candidate enhancers")
+    parser.add_argument('--regions_allowlist', default="", help="Bed file of regions to forcibly include in candidate enhancers. Overrides regions_blocklist")
+    parser.add_argument('--regions_blocklist', default="", help="Bed file of regions to forcibly exclude from candidate enhancers")
     
     args = parser.parse_args()
     return(args)
@@ -41,8 +41,8 @@ def processCellType(args):
         make_candidate_regions_from_summits(macs_peaks = args.narrowPeak, 
                                             accessibility_file = args.bam, 
                                             genome_sizes = args.chrom_sizes, 
-                                            regions_whitelist = args.regions_whitelist,
-                                            regions_blacklist = args.regions_blacklist,
+                                            regions_allowlist = args.regions_allowlist,
+                                            regions_blocklist = args.regions_blocklist,
                                             n_enhancers = args.nStrongestPeaks, 
                                             peak_extend = args.peakExtendFromSummit, 
                                             outdir = args.outDir)
@@ -50,8 +50,8 @@ def processCellType(args):
         make_candidate_regions_from_peaks(macs_peaks = args.narrowPeak, 
                                     accessibility_file = args.bam, 
                                     genome_sizes = args.chrom_sizes, 
-                                    regions_whitelist = args.regions_whitelist,
-                                    regions_blacklist = args.regions_blacklist,
+                                    regions_allowlist = args.regions_allowlist,
+                                    regions_blocklist = args.regions_blocklist,
                                     n_enhancers = args.nStrongestPeaks, 
                                     peak_extend = args.peakExtendFromSummit, 
                                     minPeakWidth = args.minPeakWidth,
