@@ -26,7 +26,7 @@ def parseargs(required_args=True):
     parser.add_argument('--ignoreSummits', action="store_true", help="Compute peaks using the full peak regions, rather than extending from summit.")
     parser.add_argument('--minPeakWidth', default=500, help="Candidate regions whose width is below this threshold are expanded to this width. Only used with --ignoreSummits")
 
-    parser.add_argument('--regions_allowlist', default="", help="Bed file of regions to forcibly include in candidate enhancers. Overrides regions_blocklist")
+    parser.add_argument('--regions_includelist', default="", help="Bed file of regions to forcibly include in candidate enhancers. Overrides regions_blocklist")
     parser.add_argument('--regions_blocklist', default="", help="Bed file of regions to forcibly exclude from candidate enhancers")
     
     args = parser.parse_args()
@@ -41,7 +41,7 @@ def processCellType(args):
         make_candidate_regions_from_summits(macs_peaks = args.narrowPeak, 
                                             accessibility_file = args.bam, 
                                             genome_sizes = args.chrom_sizes, 
-                                            regions_allowlist = args.regions_allowlist,
+                                            regions_includelist = args.regions_includelist,
                                             regions_blocklist = args.regions_blocklist,
                                             n_enhancers = args.nStrongestPeaks, 
                                             peak_extend = args.peakExtendFromSummit, 
@@ -50,7 +50,7 @@ def processCellType(args):
         make_candidate_regions_from_peaks(macs_peaks = args.narrowPeak, 
                                     accessibility_file = args.bam, 
                                     genome_sizes = args.chrom_sizes, 
-                                    regions_allowlist = args.regions_allowlist,
+                                    regions_includelist = args.regions_includelist,
                                     regions_blocklist = args.regions_blocklist,
                                     n_enhancers = args.nStrongestPeaks, 
                                     peak_extend = args.peakExtendFromSummit, 
