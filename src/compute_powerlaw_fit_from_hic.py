@@ -71,7 +71,7 @@ def load_hic_for_powerlaw(args):
                 this_data['dist_for_fit'] = abs(this_data['bin1'] - this_data['bin2']) * args.resolution
                 all_data_list.append(this_data)
             elif args.hic_type == 'bedpe':
-                hic_file = get_hic_file(chrom, args.hicDir, hic_type='bedpe')
+                hic_file, hic_norm_file, hic_is_vc = get_hic_file(chrom, args.hicDir, hic_type='bedpe')
                 print("Working on {}".format(hic_file))
                 this_data = load_hic(hic_file = hic_file,
                                      hic_type = 'bedpe',
