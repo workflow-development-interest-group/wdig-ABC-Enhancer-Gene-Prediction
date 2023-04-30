@@ -23,9 +23,12 @@ def load_genes(file,
                cellType,
                class_gene_file):
 
+    print(file)
     bed = read_bed(file) 
+    print("finish read bed")
+    print(bed)
     genes = process_gene_bed(bed, gene_id_names, primary_id, chrom_sizes)
-
+    print("finished process gene bed")
     genes[['chr', 'start', 'end', 'name', 'score', 'strand']].to_csv(os.path.join(outdir, "GeneList.bed"),
                                                                     sep='\t', index=False, header=False)
 
@@ -136,7 +139,7 @@ def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None, fail_on_nonuni
         bed = bed.drop(['thickStart','thickEnd','itemRgb','blockCount','blockSizes','blockStarts'], axis=1)
     except Exception as e:
         pass
-    
+    print("process gene progress 1")
     assert(main_name in name_cols)
 
     names = bed.name.str.split(";", expand=True)
@@ -150,6 +153,7 @@ def process_gene_bed(bed, name_cols, main_name, chrom_sizes=None, fail_on_nonuni
     bed['tss'] = get_tss_for_bed(bed)
 
     bed.drop_duplicates(inplace=True)
+    print("process gene progress 2")
 
     #Remove genes that are not defined in chromosomes file
     if chrom_sizes is not None:
@@ -421,10 +425,24 @@ def average_features(df, feature, feature_bam_list, skip_rpkm_quantile):
 bed_extra_colnames = ["name", "score", "strand", "thickStart", "thickEnd", "itemRgb", "blockCount", "blockSizes", "blockStarts"]
 #JN: 9/13/19: Don't assume chromosomes start with 'chr'
 #chromosomes = ['chr' + str(entry) for entry in list(range(1,23)) + ['M','X','Y']]   # should pass this in as an input file to specify chromosome order
+
 def read_bed(filename, extra_colnames=bed_extra_colnames, chr=None, sort=False, skip_chr_sorting=True):
-    skip = 1 if ("track" in open(filename, "r").readline()) else 0
+    print(filename)
+    extension = filename[-4:]
+    print(extension)
     names = ["chr", "start", "end"] + extra_colnames
+    print(filename)
+    print(names)
+    skip = 1 if ("track" in open(filename, "r").readline()) else 0
+    num_columns = pd.read_table(filename, header=None, skiprows=skip, comment='#').shape
+    print(num_columns[1])
+    if (num_columns[1] == 3):
+        names = ["chr", "start", "end"] 
+    if (num_columns[1] == 2):
+        names = ["chr", "length"] 
+    print(names)
     result = pd.read_table(filename, names=names, header=None, skiprows=skip, comment='#')
+    print("passed read table")
     result = result.dropna(axis=1, how='all')  # drop empty columns
     assert result.columns[0] == "chr"
 
@@ -437,7 +455,6 @@ def read_bed(filename, extra_colnames=bed_extra_colnames, chr=None, sort=False, 
     if sort:
         result.sort_values(["chr", "start", "end"], inplace=True)
     return result
-
 
 def read_bedgraph(filename):
     read_bed(filename, extra_colnames=["score"], skip_chr_sorting=True)
