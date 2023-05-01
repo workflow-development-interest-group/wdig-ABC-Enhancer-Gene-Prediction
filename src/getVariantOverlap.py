@@ -26,10 +26,10 @@ def test_variant_overlap(args, all_putative):
     variant_overlap = variant_overlap_pred.loc[variant_overlap_pred['distance']<= 2000000]
     variant_overlap.to_csv(variant_overlap_file+".tmp", sep="\t", index=False, header=True, compression="gzip", float_format="%.6f")
 
-# shrink regions
-import  subprocess
-subprocess.check_call("zcat {}.tmp | head -1 | gzip > {}".format(variant_overlap_file, variant_overlap_file), shell=True)
-subprocess.check_call("zcat {}.tmp | sed 1d | bedtools slop -b -150 -g {} | gzip >> {}".format(variant_overlap_file, args.chrom_sizes, variant_overlap_file), shell=True)
+    # shrink regions
+    import  subprocess
+    subprocess.check_call("zcat {}.tmp | head -1 | gzip > {}".format(variant_overlap_file, variant_overlap_file), shell=True)
+    subprocess.check_call("zcat {}.tmp | sed 1d | bedtools slop -b -150 -g {} | gzip >> {}".format(variant_overlap_file, args.chrom_sizes, variant_overlap_file), shell=True)
 
 
     print("Done.")
