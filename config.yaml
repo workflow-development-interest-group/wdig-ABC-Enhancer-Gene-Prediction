@@ -1,0 +1,9 @@
+bam_file: "example_chr22/input_data/Chromatin/wgEncodeUwDnaseK562AlnRep1.chr22.bam"
+output_name: "wgEncodeUwDnaseK562AlnRep1.chr22.macs2"
+output_dir: "example_chr22/ABC_output/Peaks/"
+narrowPeak_file: "example_chr22/ABC_output/Peaks/wgEncodeUwDnaseK562AlnRep1.chr22.macs2_peaks.narrowPeak.sorted"
+chrom_sizes_file: "example_chr22/reference/chr22"
+regions_blocklist_file: "reference/wgEncodeHg19ConsensusSignalArtifactRegions.bed"
+regions_includelist_file: "example_chr22/reference/RefSeqCurated.170308.bed.CollapsedGeneBounds.TSS500bp.chr22.bed"
+peakExtendFromSummit: 250
+nStrongestPeaks: 3000
